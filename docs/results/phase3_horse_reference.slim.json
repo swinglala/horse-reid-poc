@@ -1,0 +1,191 @@
+{
+  "horse_id": "unknown",
+  "reference": {
+    "canonical_marking_mask": "reference/canonical_mask.png",
+    "face_embedding_method": "clip_ViT-B-32_mean_of_29",
+    "view_count": 29,
+    "views": {
+      "three_quarter": 10,
+      "profile": 14,
+      "frontal": 5
+    },
+    "frames": [
+      0,
+      24,
+      42,
+      57,
+      72,
+      90,
+      117,
+      132,
+      147,
+      306,
+      363,
+      516,
+      558,
+      576,
+      618,
+      666,
+      681,
+      699,
+      720,
+      735,
+      750,
+      765,
+      783,
+      798,
+      813,
+      828,
+      843,
+      975,
+      993
+    ],
+    "mapper": "planar",
+    "canonical_size": [
+      256,
+      320
+    ],
+    "files": {
+      "prob": "reference/canonical_prob.png",
+      "coverage": "reference/canonical_coverage.png",
+      "mask": "reference/canonical_mask.png",
+      "consistency": "reference/canonical_consistency.png",
+      "support": "reference/canonical_support.png",
+      "nsupport": "reference/canonical_nsupport.png",
+      "marking": "reference/canonical_marking.png",
+      "ascii": "reference/canonical_marking.txt"
+    },
+    "canonical_peaks": [
+      {
+        "x": 70,
+        "y": 92,
+        "support_s": 0.0467,
+        "support": 0.0552,
+        "prob": 0.0628,
+        "coverage": 0.9791,
+        "n_support": 1,
+        "frames": [
+          618
+        ],
+        "id": "p0"
+      },
+      {
+        "x": 150,
+        "y": 34,
+        "support_s": 0.0454,
+        "support": 0.0466,
+        "prob": 0.1378,
+        "coverage": 0.7578,
+        "n_support": 1,
+        "frames": [
+          843
+        ],
+        "id": "p1"
+      },
+      {
+        "x": 96,
+        "y": 58,
+        "support_s": 0.0345,
+        "support": 0.0682,
+        "prob": 0.1889,
+        "coverage": 0.9791,
+        "n_support": 3,
+        "frames": [
+          363,
+          558,
+          576
+        ],
+        "id": "p2"
+      },
+      {
+        "x": 77,
+        "y": 196,
+        "support_s": 0.0331,
+        "support": 0.0336,
+        "prob": 0.0592,
+        "coverage": 0.9791,
+        "n_support": 1,
+        "frames": [
+          558
+        ],
+        "id": "p3"
+      },
+      {
+        "x": 113,
+        "y": 52,
+        "support_s": 0.0324,
+        "support": 0.0462,
+        "prob": 0.12,
+        "coverage": 1.0,
+        "n_support": 1,
+        "frames": [
+          363
+        ],
+        "id": "p4"
+      },
+      {
+        "x": 125,
+        "y": 85,
+        "support_s": 0.0261,
+        "support": 0.0565,
+        "prob": 0.1858,
+        "coverage": 0.9495,
+        "n_support": 2,
+        "frames": [
+          975,
+          993
+        ],
+        "id": "p5"
+      },
+      {
+        "x": 155,
+        "y": 73,
+        "support_s": 0.026,
+        "support": 0.0447,
+        "prob": 0.1082,
+        "coverage": 0.7578,
+        "n_support": 1,
+        "frames": [
+          576
+        ],
+        "id": "p6"
+      }
+    ],
+    "params": {
+      "peak_sigma": 4.0,
+      "min_support": 0.02,
+      "peak_min_distance_px": 12,
+      "max_peaks": 8,
+      "peak_support_radius_px": 8.0,
+      "prob_threshold": 0.5,
+      "min_coverage": 0.15
+    },
+    "stats": {
+      "mask_px": 0,
+      "observed_px": 81920,
+      "mean_consistency_observed": 0.9066,
+      "n_peaks": 7,
+      "n_peaks_multi": 2,
+      "peak_sigma": 4.0,
+      "min_support": 0.02,
+      "max_support": 0.0801,
+      "max_n_support": 2,
+      "joined_frames": 30,
+      "skipped_frames": [
+        648
+      ]
+    },
+    "created_utc": "2026-10-01T17:36:43+00:00",
+    "notes": [
+      "Aggregation of REAL observations only: no generated, in-painted or mirrored face; unobserved canonical pixels have coverage 0.",
+      "canonical_marking_mask is the PRIMARY identity evidence; face_embedding is an auxiliary descriptor.",
+      "mapper 'planar': 2D similarity warp onto a 256x320 frontal template (stand-in for the 3D head surface); 3/4 and profile far halves down-weighted.",
+      "Template sides are image sides of the frontal view: canonical image-left = horse's anatomical right.",
+      "mask = (prob > 0.5) & (coverage > 0.15)",
+      "support = sum(w * accepted_mask) / sum(w): weighted fraction of observations whose Phase-2 accepted mask covers the pixel; n_support = number of such frames (canonical_nsupport.png stores raw counts).",
+      "canonical_peaks are CANDIDATE marking locations: local maxima of support_s = gaussian(support, sigma=4.0) >= 0.02 (min distance 12 px, max 8), ranked by support_s, each backed by >= 1 accepted frame mask within 8 px (frames/n_support = frames with mask pixels in that radius); prob/coverage are reported only. They are not part of the mask, which requires prob > 0.5.",
+      "1 frame(s) skipped (no usable landmarks / mask): [648]"
+    ],
+    "face_embedding": "<512-d CLIP vector omitted in this copy>"
+  }
+}

@@ -1,0 +1,17 @@
+# Pinned to the versions verified in the project venv (Python 3.11).
+# NOTE: Intel (x86_64) macOS wheels stop at torch 2.2.2 / torchvision 0.17.2,
+# which in turn require numpy<2. Do not bump these on Intel Macs.
+torch==2.2.2
+torchvision==0.17.2
+numpy<2
+opencv-python==4.11.0.86
+ultralytics==8.4.171
+scipy==1.17.1
+scikit-image==0.26.0
+matplotlib==3.11.2
+tqdm==4.70.1
+lap==0.5.13
+pillow==12.3.0
+transformers>=4.46,<4.50
+timm==1.0.30
+pytest
