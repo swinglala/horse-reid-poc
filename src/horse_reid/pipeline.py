@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -20,7 +20,7 @@ from .detection import YoloHorseDetector
 from .device import select_device
 from .face import build_head_detector
 from .quality import FrameQualityScorer
-from .quality.scorer import rescore
+from .quality.scorer import rescore_all
 from .quality.metrics import yaw_bin
 from .selection import default_min_gap, select_frames
 from .tracking import TrackStore
@@ -197,15 +197,17 @@ def run_phase1(cfg: PipelineConfig) -> dict[str, Any]:
         if writer is not None:
             writer.release()
 
-        # ---------------- selection ---------------- #
+        # ---------------- scoring + selection ---------------- #
         t0 = time.time()
+        # Combine the raw components once, with the run-level (adaptive) blur reference.
+        blur_ref = rescore_all(scores, cfg.quality, cfg.weights, keep_original=False)
         span = (last_frame_idx + 1) if last_frame_idx >= 0 else 0
-        sel = _select(store, scores, cfg, span, n_head_frames)
+        sel = _select(store, scores, cfg, span, n_head_frames, blur_ref)
         timer.add("select", time.time() - t0)
 
         # ---------------- outputs ---------------- #
         t0 = time.time()
-        _write_selection_outputs(out, reader, store, sel.selected, cfg.head_crop_margin)
+        _write_selection_outputs(out, reader, store, sel, cfg.head_crop_margin)
         timer.add("write", time.time() - t0)
 
     wall = time.time() - t_start
@@ -228,13 +230,15 @@ def run_phase1(cfg: PipelineConfig) -> dict[str, Any]:
     with open(out / "frame_scores.json", "w") as f:
         json.dump({
             "video": video_info,
-            "config": cfg.to_dict(),
+            "config": {**cfg.to_dict(), "blur_ref_used": round(blur_ref, 4)},
             "device": device,
             "primary_track_id": sel.primary,
             "primary_track_group": sorted(sel.group),
             "min_gap_frames": sel.min_gap,
             "head_stride": cfg.head_stride,
             "selected": [s.frame for s in sel.selected],
+            "low_quality_selection": sel.low_quality,
+            "low_quality_reason": sel.low_quality_reason,
             "timing_s": timer.as_dict(),
             "summary": summary,
             "scores": [s.to_dict() for s in scores],
@@ -254,6 +258,9 @@ class _Selection:
     pool: list[FrameScore]
     min_gap: int
     selected: list[FrameScore]
+    blur_ref: float
+    low_quality: bool = False
+    low_quality_reason: Optional[str] = None
 
 
 def _candidate_pool(scores: list[FrameScore], group: set[int]) -> list[FrameScore]:
@@ -266,7 +273,7 @@ def _candidate_pool(scores: list[FrameScore], group: set[int]) -> list[FrameScor
 
 
 def _select(store: TrackStore, scores: list[FrameScore], cfg: PipelineConfig,
-            span: int, n_head_frames: int) -> _Selection:
+            span: int, n_head_frames: int, blur_ref: float) -> _Selection:
     primary = store.primary_horse_track()
     group = store.primary_track_group()
     pool = _candidate_pool(scores, set(group))
@@ -274,16 +281,20 @@ def _select(store: TrackStore, scores: list[FrameScore], cfg: PipelineConfig,
                else auto_min_gap(span, n_head_frames, cfg.num_frames, cfg.head_stride))
     selected = select_frames(pool, cfg.num_frames, min_gap_frames=min_gap, total_frames=span,
                              min_score=cfg.min_score)
+    low_quality = bool(getattr(selected, "low_quality", False))
+    reason = getattr(selected, "reason", None)
     logger.info("Primary track %s (group %s): %d candidate frames -> %d of %d requested selected "
                 "(min_gap=%d, min_score=%.2f)", primary, group, len(pool), len(selected),
                 cfg.num_frames, min_gap, cfg.min_score)
-    return _Selection(primary, group, pool, min_gap, selected)
+    return _Selection(primary, group, pool, min_gap, list(selected), blur_ref, low_quality, reason)
 
 
 def _write_selection_outputs(out: Path, reader: VideoReader, store: TrackStore,
-                             selected: list[FrameScore], margin: float) -> None:
+                             sel: _Selection, margin: float) -> None:
     """Write ``detections.json``, ``face_crops/``, ``selected_frames(_raw)/`` and
-    ``contact_sheet.jpg`` for ``selected`` (old ``frame_*.jpg`` are removed first)."""
+    ``contact_sheet.jpg`` for ``sel.selected`` (old ``frame_*.jpg`` are removed first).
+    A low-quality selection gets a ``LOW QUALITY`` banner and label prefix."""
+    selected = sel.selected
     for sub in ("face_crops", "selected_frames", "selected_frames_raw"):
         for old in (out / sub).glob("frame_*.jpg"):
             old.unlink()
@@ -307,14 +318,36 @@ def _write_selection_outputs(out: Path, reader: VideoReader, store: TrackStore,
             primary_track_id=s.track_id, keypoints=s.extra.get("keypoints"),
         )
         _write_jpg(out / "selected_frames" / f"frame_{s.frame:05d}.jpg", ann)
-        sheet_items.append((head_crop, _score_label_lines(s)))
-    make_contact_sheet(sheet_items, save_path=out / "contact_sheet.jpg")
+        lines = _score_label_lines(s)
+        if sel.low_quality:
+            lines[0] = "LOW QUALITY " + lines[0]
+        sheet_items.append((head_crop, lines))
+    title = None
+    if sel.low_quality:
+        title = "LOW QUALITY selection: " + (sel.low_quality_reason or "").replace("\u2265", ">=")
+    make_contact_sheet(sheet_items, save_path=out / "contact_sheet.jpg", title=title)
 
 
 def _selection_summary(store: TrackStore, sel: _Selection, cfg: PipelineConfig) -> dict[str, Any]:
     """Summary fields that depend on the track grouping and the selection."""
     pool, selected = sel.pool, sel.selected
+    q = cfg.quality
+    head_w = float(np.median([s.head_bbox[2] - s.head_bbox[0] for s in pool])) if pool else None
+    head_h = float(np.median([s.head_bbox[3] - s.head_bbox[1] for s in pool])) if pool else None
+    warnings: list[str] = []
+    if sel.low_quality:
+        warnings.append(f"low-quality selection: {sel.low_quality_reason} "
+                        "(fallback: all candidates ranked by score)")
+    if head_w is not None and head_w < q.min_head_width_px:
+        warnings.append(f"median head width {head_w:.0f} px < {q.min_head_width_px:.0f} px \u2014 "
+                        "too small for reliable white-marking segmentation")
     return {
+        "low_quality_selection": sel.low_quality,
+        "low_quality_reason": sel.low_quality_reason,
+        "blur_ref": round(sel.blur_ref, 4),
+        "blur_ref_mode": q.blur_ref_mode,
+        "median_head_px": f"{head_w:.0f}x{head_h:.0f}" if head_w is not None else None,
+        "quality_warnings": warnings,
         "frames_with_head": len({s.frame for s in pool}),
         "selected": len(selected),
         "num_frames_requested": cfg.num_frames,
@@ -377,12 +410,12 @@ def run_reselect(cfg: PipelineConfig) -> dict[str, Any]:
                 max([d.frame for d in store.detections] + [s.frame for s in scores] + [-1]) + 1)
     span = int(span)
 
-    for fs in scores:  # apply current weights / gates without re-running detection
-        rescore(fs, cfg.quality, cfg.weights)
-    sel = _select(store, scores, cfg, span, n_head_frames)
+    # apply current weights / gates / blur reference without re-running detection
+    blur_ref = rescore_all(scores, cfg.quality, cfg.weights)
+    sel = _select(store, scores, cfg, span, n_head_frames, blur_ref)
     rotation = cfg.rotation if cfg.rotation is not None else video_info.get("rotation_applied")
     with VideoReader(cfg.input, rotation=rotation) as reader:
-        _write_selection_outputs(out, reader, store, sel.selected, cfg.head_crop_margin)
+        _write_selection_outputs(out, reader, store, sel, cfg.head_crop_margin)
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     original_run = orig.get("original_run") or {
@@ -399,7 +432,13 @@ def run_reselect(cfg: PipelineConfig) -> dict[str, Any]:
         "reselect_wall_time_s": round(time.time() - t_start, 2),
     })
     summary.setdefault("video_duration_s", video_info.get("duration_s"))
+    doc_cfg = dict(fs_doc.get("config") or {})
+    doc_cfg.update({"quality": asdict(cfg.quality), "weights": asdict(cfg.weights),
+                    "blur_ref_used": round(blur_ref, 4)})
     fs_doc.update({
+        "config": doc_cfg,
+        "low_quality_selection": sel.low_quality,
+        "low_quality_reason": sel.low_quality_reason,
         "primary_track_id": sel.primary,
         "primary_track_group": sorted(sel.group),
         "min_gap_frames": sel.min_gap,
@@ -466,7 +505,10 @@ def _write_summary(path: Path, summary: dict[str, Any], video: dict[str, Any], t
         f"head methods:         {summary['head_methods_frames']} (frames per method, primary track group)",
         f"yaw sources:          {summary['yaw_sources']}",
         f"mean visibility:      cands {summary['mean_visibility_all']}, selected {summary['mean_visibility_selected']}",
+        f"blur_ref:             {summary.get('blur_ref')} ({summary.get('blur_ref_mode')})",
+        f"median_head_px:       {summary.get('median_head_px')}",
     ]
+    lines += [f"quality warning: {w}" for w in summary.get("quality_warnings") or []]
     if reselect:
         orig = summary.get("original_run") or {}
         lines += [
@@ -480,7 +522,7 @@ def _write_summary(path: Path, summary: dict[str, Any], video: dict[str, Any], t
             f"wall time:            {summary['wall_time_s']}s ({summary['processed_fps']} frames/s)",
             f"stage timing (s):     {timing}",
         ]
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def run_phase2(cfg: Any) -> dict[str, Any]:

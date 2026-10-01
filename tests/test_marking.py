@@ -237,3 +237,25 @@ def test_outside_landmark_hull() -> None:
     # <3 keypoints: no hull gate
     res2 = AdaptiveColorSegmenter().predict(img, _FM, {"eye": [[80.0, 80.0, 0.9]], "nose": [[100.0, 130.0, 0.9]]})
     assert "outside_landmark_hull" not in res2.stats["n_excluded_by_reason"] and len(res2.components) == 2
+
+
+def _coat_img(bgr: tuple[int, int, int], seed: int = 0) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    img = np.empty((200, 200, 3), np.float32)
+    img[:] = bgr
+    img += rng.normal(0, 4, img.shape)
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+def test_coat_class_and_applicability() -> None:
+    from horse_reid.marking_pipeline import assess_applicability
+
+    light = AdaptiveColorSegmenter().predict(_coat_img((215, 215, 215)))
+    dark = AdaptiveColorSegmenter().predict(_synthetic_face())
+    assert light.stats["coat_L_median"] >= 65 and light.stats["coat_class"] == "light"
+    assert dark.stats["coat_L_median"] < 45 and dark.stats["coat_class"] == "dark"
+    a = assess_applicability([{"stats": light.stats}] * 3 + [{"stats": dark.stats}])
+    assert a["white_marking_applicable"] is False and "3/4" in a["reason"]
+    assert a["coat_class_counts"] == {"light": 3, "dark": 1}
+    b = assess_applicability([{"stats": dark.stats}] * 3 + [{"stats": light.stats}])
+    assert b["white_marking_applicable"] is True and b["reason"] is None

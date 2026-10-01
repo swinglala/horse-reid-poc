@@ -89,6 +89,7 @@ python -m pytest tests -q
 | `--min-gap` | 선택된 프레임 사이 최소 간격 (기본 auto) |
 | `--tracker` | `bytetrack.yaml` / `botsort.yaml` |
 | `--marking-segmenter` | `sam_refined` (기본) / `adaptive_color` / `yolo_seg` (`run_marking.py`에서는 `--segmenter`) |
+| `--blur-ref-mode` | `adaptive` (기본: blur 기준 = 이번 실행 후보 blur_var의 median, 하한 20) / `absolute` (고정 기준 150). 원거리/저해상도 영상은 adaptive 필요 |
 | `--mapper` | Phase 3 mapper: `planar` / `4dequine` |
 | `--horse-id` | reference의 `horse_id` |
 
@@ -123,10 +124,12 @@ data/output/
 | 말이 검출된 프레임 | 965 / 1005 |
 | head stage 실행 프레임 | 335 (stride 3) |
 | primary track group | 5개 track 병합 (ByteTrack이 한 마리를 12개 ID로 분할; 한 track은 "person"으로 시작해 majority-class track typing으로 해결) |
-| scored candidates | 304 (min_score 0.35 통과 168) |
-| 선택 | 30 / 30, 0.0–33.1 s 전 구간 |
-| yaw bin (선택) | frontal 5 / three-quarter 11 / profile 14 |
-| mean visibility (선택) | 0.957 |
+| scored candidates | 304 (min_score 0.35 통과 253, blur_ref 34.66 adaptive) |
+| 선택 | 30 / 30, 0.0–33.0 s 전 구간. 프레임: [0, 24, 42, 63, 90, 117, 132, 147, 162, 318, 363, 516, 558, 576, 624, 648, 663, 681, 699, 720, 735, 750, 765, 783, 798, 813, 828, 843, 975, 990] |
+| 머리 크기 (median) | 104x172 px |
+| yaw bin (선택) | frontal 7 / three-quarter 9 / profile 14 |
+| mean score (선택) | 0.811 |
+| mean visibility (선택) | 0.948 |
 | wall time | 1219 s (CPU). head stage 1065 s, Grounding DINO 약 3.2 s/frame |
 
 25–28 s 구간에서는 frame 750, 765, 783, 798, 813, 828, 843 (25.0–28.1 s)이 선택되었다.
@@ -138,7 +141,7 @@ data/output/
 3. **큰 얼굴을 선호하는가:** 예. head size가 점수의 20%를 차지한다.
 4. **blur 프레임이 제외되는가:** 예. Laplacian variance gate로 제외된다.
 5. **사람이 가린 프레임이 제외되는가:** 예. person box 기반 occlusion score를 쓰며, 촬영자가 시야를 가린 6–8 s 부근 프레임은 0.2 미만으로 채점되었다.
-6. **3/4 측면이 포함되는가:** 예. three-quarter 11 + profile 14 + frontal 5.
+6. **3/4 측면이 포함되는가:** 예. three-quarter 9 + profile 14 + frontal 7.
 7. **사람이 봤을 때 진짜 머리인가:** 30장 모두 실제 머리 crop이다. 초기 실행에서 엉덩이 false positive (frame 240, head_conf 0.20)가 있어 head-confidence / head-area gate를 추가했다.
 
 ### Phase 2: 흰 무늬 segmentation
@@ -152,12 +155,13 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 | 항목 | 값 |
 |---|---|
 | segmenter | `sam_refined` (30 frames) |
-| marking이 accept된 프레임 | 9 / 30 (frontal 3/5, three_quarter 4/11, profile 2/14) |
-| 평균 marking 면적 | 얼굴의 0.23% (전체), 0.77% (accept된 프레임) |
-| 제외된 영역 | too_small 324, edge_fragment 37, strap_shape 36, outside_landmark_hull 31, low_solidity 31, sam_flood 11, above_ears 7 |
-| wall time | 34.6 s (CPU) |
+| marking이 accept된 프레임 | 8 / 30 (frontal 3/7, three_quarter 2/9, profile 3/14) |
+| 평균 marking 면적 | 얼굴의 0.22% (전체), 0.83% (accept된 프레임) |
+| 제외된 영역 | too_small 322, edge_fragment 40, strap_shape 38, outside_landmark_hull 29, low_solidity 32, sam_flood 11, above_ears 7 |
+| coat class | dark 24 / medium 6 (`white_marking_applicable: true`) |
+| wall time | 31.5 s (CPU) |
 
-**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 975, 993에서 accept된다. 나머지 accept 성분(frame 363/558/576/618/843)은 ear-base / poll highlight로 false positive이다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
+**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 975, 990에서 accept된다. 나머지 accept 성분(예: frame 363/558/576)은 ear-base / poll highlight로 false positive이다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
 
 ### Phase 3: canonical marking reference
 
@@ -171,15 +175,15 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |                                |
 |                                |
 |                  *░            |
-|              ░  ░ ░            |
-|           ░░░░    ░            |
-|            *░░                 |
+|              ░    ░░           |
+|            ░ ░░   ░            |
+|            * ░ ░               |
 |                                |
 |                   *            |
 |               *                |
-|        *                       |
 |                                |
-|                                |
+|                 ░░             |
+|                  ░             |
 |                                |
 |                                |
 |                                |
@@ -197,7 +201,8 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |           ░                    |
 |                                |
 |                                |
-|             ░                  |
+|                                |
+|                                |
 |                                |
 |                                |
 |                                |
@@ -211,12 +216,12 @@ value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ 
 
 ![Final report](docs/results/final_report.jpg)
 
-- 30프레임 중 29개 mapping (frame 648은 landmark가 없어 skip). view: frontal 5 / 3-4 10 / profile 14.
-- canonical mask px = 0: star가 29프레임 중 2프레임에서만 accept되어 prob이 0.5를 넘지 못한다.
-- candidate peak 7개, 그중 multi-frame support 2개:
-  - p2 (96,58) n=3, frames [363, 558, 576]: ear-base highlight, false positive로 추정.
-  - p5 (125,85) n=2, frames [975, 993]: 이마 star. 서로 다른 두 프레임이 같은 canonical 위치에 정렬되었다 (정렬 오차 약 10 px, sigma 4 px smoothing으로 흡수).
-- `face_embedding`: CLIP ViT-B/32, 29개 crop의 mean (보조 용도). 주 identity 증거는 canonical marking mask이다.
+- 30프레임 모두 mapping (30/30). view: frontal 7 / 3-4 8 / profile 14.
+- canonical mask px = 0: star가 30프레임 중 2프레임에서만 accept되어 prob이 0.5를 넘지 못한다.
+- candidate peak 6개, 그중 multi-frame support 2개:
+  - p1 (96,58) n=3, frames [363, 558, 576]: ear-base highlight, false positive로 추정.
+  - p4 (125,85) n=2, frames [975, 990]: 이마 star. 서로 다른 두 프레임이 같은 canonical 위치에 정렬되었다 (정렬 오차 약 10 px, sigma 4 px smoothing으로 흡수).
+- `face_embedding`: CLIP ViT-B/32, 30개 crop의 mean (보조 용도). 주 identity 증거는 canonical marking mask이다.
 
 `reference/horse_reference.json` 구조 (일부 생략):
 
@@ -226,20 +231,41 @@ value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ 
   "reference": {
     "canonical_marking_mask": "reference/canonical_mask.png",
     "face_embedding": [ "... 512-d CLIP vector ..." ],
-    "face_embedding_method": "clip_ViT-B-32_mean_of_29",
-    "view_count": 29,
-    "views": {"three_quarter": 10, "profile": 14, "frontal": 5},
+    "face_embedding_method": "clip_ViT-B-32_mean_of_30",
+    "view_count": 30,
+    "views": {"three_quarter": 8, "profile": 14, "frontal": 7},
     "frames": [0, 24, 42, "..."],
     "mapper": "planar",
     "canonical_size": [256, 320],
     "files": {"prob": "...", "coverage": "...", "mask": "...", "marking": "...", "ascii": "..."},
-    "canonical_peaks": [{"id": "p5", "x": 125, "y": 85, "n_support": 2, "frames": [975, 993], "...": "..."}],
+    "canonical_peaks": [{"id": "p4", "x": 125, "y": 85, "n_support": 2, "frames": [975, 990], "...": "..."}],
     "params": {"peak_sigma": 4.0, "prob_threshold": 0.5, "...": "..."},
-    "stats": {"mask_px": 0, "n_peaks": 7, "n_peaks_multi": 2, "skipped_frames": [648]},
+    "stats": {"mask_px": 0, "n_peaks": 6, "n_peaks_multi": 2, "skipped_frames": []},
     "notes": ["..."]
   }
 }
 ```
+
+### 두 번째 영상 1000018057.mp4 (회색 말, 원거리)
+
+회색 말을 멀리서 촬영한 영상 (868 frames, 28.9 s, 720x1280 세로, CPU). 머리 크기 median 56x84 px. 원본 결과물: `docs/results/video2_*`.
+
+![video2 contact sheet](docs/results/video2_contact_sheet.jpg)
+
+![video2 marking sheet](docs/results/video2_marking_sheet.jpg)
+
+| 항목 | 값 |
+|---|---|
+| Phase 1 선택 | 30 / 30 (203 / 251 후보 통과, adaptive blur 기준 20.0) |
+| yaw bin (선택) | profile 22 / three_quarter 5 / frontal 3 |
+| 선택 시간 범위 | 0.4–18.8 s |
+| wall time | 799 s (CPU), head stage 686 s |
+| 품질 경고 | `median head width 56 px < 96 px` |
+| Phase 2 | marking 14 / 30 프레임, 평균 얼굴의 0.31% -- 육안상 흰 털 무늬가 아니라 halter/rope highlight |
+| coat class | light 21 / medium 9 (light >= 50% 이므로 `white_marking_applicable: false`) |
+| Phase 3 | peak 5개, p0 (61,72) n=7 프레임 [30,63,195,207,219,234,255] -- 일관되게 밝은 털 영역이지 marking이 아님, mask_px 0 |
+
+**솔직한 결론:** 원거리 회색 말에서도 adaptive blur 기준을 쓰면 프레임 선택은 동작한다 (30/30). 그러나 흰 무늬 segmentation은 밝은/회색 coat에는 적용할 수 없다. 흰 무늬가 coat와 분리되지 않으므로 Phase 2/3의 marking과 peak는 의미가 없고, 파이프라인이 이를 명시한다: `marking_results.json` 최상위 `"white_marking_applicable": false` + `reason`, `marking/summary.txt`의 `applicability:` 줄, `marking_sheet.jpg`의 빨간 배너. 이런 말은 다른 단서(털 소용돌이, chestnut, 흉터, muzzle 색소)가 필요하다.
 
 ## 6. 한계와 다음 단계
 
@@ -250,6 +276,8 @@ value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ 
 - **4DEquine:** CUDA 전용 + BSL-1.1 + VAREN 모델 등록이 필요해 이 환경에서 실행할 수 없다. adapter와 model-free 수학은 구현/테스트되어 있다. 참고: [docs/4dequine_integration.md](docs/4dequine_integration.md).
 - **AI-Hub 데이터셋:** 한국 국적 로그인/승인이 필요해 이 환경에서 받을 수 없다. 가짜 데이터는 만들지 않았고 converter(`scripts/convert_aihub.py`)만 준비되어 있다. 참고: [docs/aihub_dataset.md](docs/aihub_dataset.md).
 - **다중 말 영상:** 현재 track 병합은 시간 기반 규칙이다. 여러 마리가 나오는 영상에는 appearance 기반 track 병합이 필요하다.
+- **blur 기준 (교훈):** 절대 blur 기준(Laplacian variance 150)은 원거리 영상에서 모든 프레임을 흐림으로 판정해 실패했다. 이제 기본값은 adaptive (실행의 median blur_var, 하한 20)이다. 또한 `median_head_px < 96 px`이면 해상도 경고를 남긴다 (두 번째 영상: 56 px).
+- **밝은/회색 coat:** 흰 무늬 개념이 적용되지 않는다. `coat_L_median`(L 0..100)으로 프레임별 `coat_class` (dark < 45, medium < 65, light)를 계산하고, light가 50% 이상이면 `white_marking_applicable: false`로 표시한다.
 - 모델 선택 근거는 [docs/model_selection.md](docs/model_selection.md).
 
 ## 7. 저장소 구조

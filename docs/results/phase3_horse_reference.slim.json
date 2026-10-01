@@ -5,27 +5,27 @@
     "face_embedding_method": "clip_ViT-B-32_mean_of_29",
     "view_count": 29,
     "views": {
-      "three_quarter": 10,
+      "three_quarter": 8,
       "profile": 14,
-      "frontal": 5
+      "frontal": 7
     },
     "frames": [
       0,
       24,
       42,
-      57,
-      72,
+      63,
       90,
       117,
       132,
       147,
-      306,
+      162,
+      318,
       363,
       516,
       558,
       576,
-      618,
-      666,
+      624,
+      663,
       681,
       699,
       720,
@@ -38,7 +38,7 @@
       828,
       843,
       975,
-      993
+      990
     ],
     "mapper": "planar",
     "canonical_size": [
@@ -57,53 +57,53 @@
     },
     "canonical_peaks": [
       {
-        "x": 70,
-        "y": 92,
-        "support_s": 0.0467,
-        "support": 0.0552,
-        "prob": 0.0628,
-        "coverage": 0.9791,
-        "n_support": 1,
-        "frames": [
-          618
-        ],
-        "id": "p0"
-      },
-      {
         "x": 150,
         "y": 34,
-        "support_s": 0.0454,
-        "support": 0.0466,
-        "prob": 0.1378,
-        "coverage": 0.7578,
+        "support_s": 0.0455,
+        "support": 0.0468,
+        "prob": 0.1392,
+        "coverage": 0.7651,
         "n_support": 1,
         "frames": [
           843
         ],
-        "id": "p1"
+        "id": "p0"
       },
       {
         "x": 96,
         "y": 58,
-        "support_s": 0.0345,
-        "support": 0.0682,
-        "prob": 0.1889,
-        "coverage": 0.9791,
+        "support_s": 0.0341,
+        "support": 0.0674,
+        "prob": 0.1674,
+        "coverage": 0.9796,
         "n_support": 3,
         "frames": [
           363,
           558,
           576
         ],
+        "id": "p1"
+      },
+      {
+        "x": 113,
+        "y": 52,
+        "support_s": 0.0329,
+        "support": 0.0469,
+        "prob": 0.1284,
+        "coverage": 1.0,
+        "n_support": 1,
+        "frames": [
+          363
+        ],
         "id": "p2"
       },
       {
         "x": 77,
         "y": 196,
-        "support_s": 0.0331,
-        "support": 0.0336,
-        "prob": 0.0592,
-        "coverage": 0.9791,
+        "support_s": 0.0325,
+        "support": 0.033,
+        "prob": 0.0535,
+        "coverage": 0.9796,
         "n_support": 1,
         "frames": [
           558
@@ -111,44 +111,31 @@
         "id": "p3"
       },
       {
-        "x": 113,
-        "y": 52,
-        "support_s": 0.0324,
-        "support": 0.0462,
-        "prob": 0.12,
-        "coverage": 1.0,
-        "n_support": 1,
+        "x": 125,
+        "y": 85,
+        "support_s": 0.0281,
+        "support": 0.0565,
+        "prob": 0.1863,
+        "coverage": 0.95,
+        "n_support": 2,
         "frames": [
-          363
+          975,
+          990
         ],
         "id": "p4"
       },
       {
-        "x": 125,
-        "y": 85,
-        "support_s": 0.0261,
-        "support": 0.0565,
-        "prob": 0.1858,
-        "coverage": 0.9495,
-        "n_support": 2,
-        "frames": [
-          975,
-          993
-        ],
-        "id": "p5"
-      },
-      {
         "x": 155,
         "y": 73,
-        "support_s": 0.026,
-        "support": 0.0447,
-        "prob": 0.1082,
-        "coverage": 0.7578,
+        "support_s": 0.0256,
+        "support": 0.0441,
+        "prob": 0.1429,
+        "coverage": 0.7651,
         "n_support": 1,
         "frames": [
           576
         ],
-        "id": "p6"
+        "id": "p5"
       }
     ],
     "params": {
@@ -163,19 +150,19 @@
     "stats": {
       "mask_px": 0,
       "observed_px": 81920,
-      "mean_consistency_observed": 0.9066,
-      "n_peaks": 7,
+      "mean_consistency_observed": 0.9062,
+      "n_peaks": 6,
       "n_peaks_multi": 2,
       "peak_sigma": 4.0,
       "min_support": 0.02,
-      "max_support": 0.0801,
+      "max_support": 0.0807,
       "max_n_support": 2,
       "joined_frames": 30,
       "skipped_frames": [
         648
       ]
     },
-    "created_utc": "2026-10-01T17:36:43+00:00",
+    "created_utc": "2026-10-01T22:51:27+00:00",
     "notes": [
       "Aggregation of REAL observations only: no generated, in-painted or mirrored face; unobserved canonical pixels have coverage 0.",
       "canonical_marking_mask is the PRIMARY identity evidence; face_embedding is an auxiliary descriptor.",

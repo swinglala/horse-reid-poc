@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from .adaptive_color import coat_zmap, region_info
-from .base import HorseMarkingSegmenter, MarkingResult, full_face_mask
+from .base import HorseMarkingSegmenter, MarkingResult, coat_class, full_face_mask
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +73,6 @@ class YoloSegMarkingSegmenter(HorseMarkingSegmenter):
         comps: list[dict[str, Any]] = [region_info(labels == i, face_area, z, accepted_by="model")
                                        for i in range(1, n)]
         stats = {"marking_area_frac": round(float(mask.sum()) / max(face_area, 1), 6), "n_components": n - 1,
-                 "coat_L_median": round(med, 3), "coat_L_mad": round(mad, 3), "face_area_px": face_area}
+                 "coat_L_median": round(med, 3), "coat_class": coat_class(med), "coat_L_mad": round(mad, 3), "face_area_px": face_area}
         return MarkingResult(mask=mask, prob=prob, face_mask=fm, components=comps, excluded=[],
                              method=self.name, stats=stats, debug={"candidate_prob": prob})

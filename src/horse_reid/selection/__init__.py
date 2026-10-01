@@ -1,5 +1,5 @@
 """Frame selection."""
 
-from .selector import default_min_gap, select_frames
+from .selector import Selection, default_min_gap, select_frames
 
-__all__ = ["select_frames", "default_min_gap"]
+__all__ = ["Selection", "select_frames", "default_min_gap"]

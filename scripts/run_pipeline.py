@@ -20,7 +20,7 @@ try:
 except ImportError:  # package not installed -> use the source tree
     sys.path.insert(0, str(ROOT / "src"))
 
-from horse_reid.config import PipelineConfig  # noqa: E402
+from horse_reid.config import PipelineConfig, QualityParams  # noqa: E402
 from horse_reid.face import available_head_detectors  # noqa: E402
 from horse_reid.pipeline import run_phase1, run_reselect  # noqa: E402
 from horse_reid.marking import available_marking_segmenters  # noqa: E402
@@ -38,6 +38,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-gap", type=int, default=None, help="min frame distance between picks (default: auto)")
     p.add_argument("--min-score", type=float, default=0.35,
                    help="selection quality floor; fewer frames are returned rather than low-score ones")
+    p.add_argument("--blur-ref-mode", default="adaptive", choices=["adaptive", "absolute"],
+                   help="blur score reference: adaptive = max(20, median Laplacian variance of the run's "
+                        "candidates); absolute = fixed 150 (tuned for close-ups)")
     p.add_argument("--reselect", action="store_true",
                    help="instead of Phase 1, re-run track grouping + frame selection from "
                         "<output>/detections.json and frame_scores.json (uses --input, --num-frames, "
@@ -81,11 +84,12 @@ def main(argv: list[str] | None = None) -> int:
         model=args.model, tracker=args.tracker, conf=args.conf,
         head_detector=args.head_detector, head_fallback=args.head_fallback, head_stride=args.head_stride,
         hf_cache_dir=args.hf_cache_dir, seg_model=args.seg_model,
+        quality=QualityParams(blur_ref_mode=args.blur_ref_mode),
     )
     rc = 0
     if args.reselect or args.phase in ("1", "all"):
         summary = run_reselect(cfg) if args.reselect else run_phase1(cfg)
-        print((Path(cfg.output) / "summary.txt").read_text())
+        print((Path(cfg.output) / "summary.txt").read_text(encoding="utf-8"))
         rc = 0 if summary["selected"] > 0 else 1
         if rc != 0:
             return rc

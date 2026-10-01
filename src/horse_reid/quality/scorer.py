@@ -57,9 +57,37 @@ def _area_ratio(head: BBox, horse: BBox) -> float:
     return float(ha / za)
 
 
-def rescore(fs: FrameScore, params: QualityParams, weights: QualityWeights) -> FrameScore:
-    """Recompute ``fs.score`` / ``gated`` / ``visibility`` in place from stored components."""
-    fs.extra.setdefault("score_original", fs.score)
+def resolve_blur_ref(blur_vars: Iterable[float], params: QualityParams) -> float:
+    """Laplacian-variance reference used to turn ``blur_var`` into the blur score.
+
+    ``"absolute"`` mode: ``params.blur_ref``. ``"adaptive"`` mode:
+    ``max(params.blur_ref_min, median(blur_vars))`` (finite values only;
+    ``params.blur_ref`` if there are none), i.e. the median candidate of the
+    run maps to a blur score of ``1 - 1/e ~= 0.63``.
+    """
+    if params.blur_ref_mode == "absolute":
+        return float(params.blur_ref)
+    v = np.asarray([float(b) for b in blur_vars], dtype=np.float64)
+    v = v[np.isfinite(v)]
+    if v.size == 0:
+        return float(params.blur_ref)
+    return float(max(params.blur_ref_min, float(np.median(v))))
+
+
+def rescore(fs: FrameScore, params: QualityParams, weights: QualityWeights,
+            blur_ref: Optional[float] = None, keep_original: bool = True) -> FrameScore:
+    """Recompute ``fs.blur`` / ``score`` / ``gated`` / ``visibility`` in place from
+    stored components.
+
+    ``fs.blur`` is recomputed from the raw ``fs.blur_var`` with ``blur_ref``
+    (default ``params.blur_ref``, i.e. absolute mode; see
+    :func:`resolve_blur_ref`). With ``keep_original`` the previous score is kept
+    once in ``extra["score_original"]``.
+    """
+    if keep_original:
+        fs.extra.setdefault("score_original", fs.score)
+    ref = float(params.blur_ref if blur_ref is None else blur_ref)
+    fs.blur = M.blur_score_from_var(fs.blur_var, ref)
     measured = _landmark_keypoints((fs.extra or {}).get("keypoints")) is not None
     horse_conf = float(fs.extra.setdefault("horse_conf", fs.det_conf))
     fs.extra["head_conf"] = fs.head_conf
@@ -76,6 +104,22 @@ def rescore(fs: FrameScore, params: QualityParams, weights: QualityWeights) -> F
     return fs
 
 
+def rescore_all(scores: Iterable[FrameScore], params: QualityParams, weights: QualityWeights,
+                keep_original: bool = True) -> float:
+    """Resolve the blur reference over all ``scores`` (see :func:`resolve_blur_ref`)
+    and :func:`rescore` each of them in place. Returns the ``blur_ref`` used.
+
+    This is the single "components -> score" step shared by ``run_phase1``
+    (after the detection pass, ``keep_original=False``) and ``run_reselect``.
+    """
+    scores = list(scores)
+    ref = resolve_blur_ref((s.blur_var for s in scores), params)
+    for fs in scores:
+        rescore(fs, params, weights, blur_ref=ref, keep_original=keep_original)
+    logger.info("blur_ref=%.2f (mode %s, %d candidates)", ref, params.blur_ref_mode, len(scores))
+    return ref
+
+
 class FrameQualityScorer:
     """Score the head of one horse in one frame.
 
@@ -83,6 +127,10 @@ class FrameQualityScorer:
     occlusion, view, detection confidence and face visibility. Hard gates
     (occlusion < 0.5, blur < 0.15, exposure < 0.2, visibility < 0.25 by
     default) demote a frame by ``gate_factor`` (0.2) instead of discarding it.
+
+    The score returned here uses the absolute ``blur_ref``; it is provisional.
+    The pipeline stores the raw ``blur_var`` and re-combines every score with the
+    run-level (adaptive) ``blur_ref`` via :func:`rescore_all` before selection.
     Heuristic head boxes (method contains "heuristic") are further multiplied
     by ``heuristic_head_factor`` (0.85) so real detections win ties.
 
@@ -125,7 +173,9 @@ class FrameQualityScorer:
         head_crop = crop(frame, head.bbox)
         size = M.face_size_score(head.bbox, frame.shape, p.size_ref_px)
         blur_var = M.blur_variance(head_crop, p.blur_resize_width)
-        blur = float(1.0 - np.exp(-blur_var / max(p.blur_ref, 1e-6)))
+        # Provisional (absolute blur_ref); run_phase1 re-combines all scores with the
+        # run-level blur_ref via rescore_all() once the pass is done.
+        blur = M.blur_score_from_var(blur_var, p.blur_ref)
         exposure = M.exposure_score(head_crop)
         occlusion = M.occlusion_score(head.bbox, others, frame.shape)
         landmarks = _landmark_keypoints(head.keypoints)

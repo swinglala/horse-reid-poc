@@ -1,0 +1,15 @@
+horse_reid Phase 2 (white-marking) summary
+==========================================
+segmenter:            sam_refined (methods {'sam_refined': 30})
+frames processed:     30 / 30 selected
+frames with marking:  14
+mean marking area:    0.31% of face (all frames)
+mean area (marked):   0.66% of face (frames with marking)
+yaw bins (marked/all): frontal: 0/3, profile: 12/22, three_quarter: 2/5
+excluded regions:     {'above_ears': 18, 'too_small': 63, 'outside_landmark_hull': 11, 'sam_flood': 24, 'edge_fragment': 15, 'eye_glint': 2, 'low_solidity': 1, 'strap_shape': 2}
+face mask sources:    {'seg': 30}
+coat classes:         {'light': 21, 'medium': 9}
+applicability:        NOT APPLICABLE - light/grey coat (median L >= 65 in 21/30 frames): white markings cannot be separated from the coat; use other cues (whorls, chestnuts, scars, muzzle pigmentation)
+device:               cpu
+wall time:            27.77s
+stage timing (s):     {'model_load': 0.0, 'decode': 2.871, 'face_region': 4.222, 'segment': 19.425, 'write': 0.289, 'total_wall': 27.774}

@@ -12,6 +12,7 @@ import numpy as np
 TILE = 256
 LINE_H = 18
 PAD = 6
+TITLE_H = 40
 
 
 def letterbox(img: np.ndarray, size: int = TILE, color: tuple[int, int, int] = (40, 40, 40)) -> np.ndarray:
@@ -36,11 +37,15 @@ def make_contact_sheet(
     tile: int = TILE,
     columns: Optional[int] = None,
     save_path: Optional[str | Path] = None,
+    title: Optional[str] = None,
+    title_color: tuple[int, int, int] = (0, 0, 200),
 ) -> np.ndarray:
     """Build a grid image from ``(crop_bgr, label_lines)`` items.
 
     Each tile is ``tile x tile`` (letterboxed) with a label block below it.
-    ``columns`` defaults to ``ceil(sqrt(n))``. Saves a JPEG if ``save_path``.
+    ``columns`` defaults to ``ceil(sqrt(n))``. ``title`` (optional, ASCII) is
+    drawn as a banner above the grid in ``title_color`` (BGR). Saves a JPEG if
+    ``save_path``.
     """
     n = len(items)
     if n == 0:
@@ -60,6 +65,12 @@ def make_contact_sheet(
             for j, line in enumerate(lines):
                 y = y0 + tile + (j + 1) * LINE_H
                 cv2.putText(img, str(line), (x0 + 2, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1, cv2.LINE_AA)
+    if title:
+        banner = np.full((TITLE_H, img.shape[1], 3), 255, np.uint8)
+        cv2.rectangle(banner, (0, 0), (banner.shape[1] - 1, TITLE_H - 1), title_color, 3)
+        cv2.putText(banner, str(title), (10, TITLE_H - 14), cv2.FONT_HERSHEY_SIMPLEX, 0.7, title_color, 2,
+                    cv2.LINE_AA)
+        img = np.vstack([banner, img])
     if save_path is not None:
         p = Path(save_path)
         p.parent.mkdir(parents=True, exist_ok=True)

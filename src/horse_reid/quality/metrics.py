@@ -44,10 +44,14 @@ def blur_variance(crop: np.ndarray, resize_width: int = 256) -> float:
     return float(cv2.Laplacian(gray, cv2.CV_64F).var())
 
 
+def blur_score_from_var(blur_var: float, ref: float = 150.0) -> float:
+    """Sharpness in [0, 1] from a Laplacian variance: ``1 - exp(-blur_var / ref)``."""
+    return float(1.0 - math.exp(-max(float(blur_var), 0.0) / max(float(ref), 1e-6)))
+
+
 def blur_score(crop: np.ndarray, ref: float = 150.0, resize_width: int = 256) -> float:
     """Sharpness in [0, 1]: ``1 - exp(-laplacian_var / ref)``."""
-    var = blur_variance(crop, resize_width)
-    return float(1.0 - math.exp(-var / max(ref, 1e-6)))
+    return blur_score_from_var(blur_variance(crop, resize_width), ref)
 
 
 def exposure_score(crop: np.ndarray, dark: float = 50.0, bright: float = 205.0,

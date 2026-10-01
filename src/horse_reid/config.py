@@ -38,7 +38,11 @@ class QualityParams:
     """Tunable constants for the individual quality metrics."""
 
     size_ref_px: float = 300.0          # sqrt(head area) that maps to size score 1.0
-    blur_ref: float = 150.0             # Laplacian variance reference for blur score
+    blur_ref: float = 150.0             # absolute Laplacian variance reference ("absolute" mode)
+    # "adaptive": blur_ref = max(blur_ref_min, median blur_var over the run's candidates), so a
+    # far-away / soft video is judged relative to itself; "absolute": always ``blur_ref``.
+    blur_ref_mode: str = "adaptive"
+    blur_ref_min: float = 20.0
     blur_resize_width: int = 256
     # Hard gates: frames failing any gate are kept but demoted (score *= gate_factor).
     gate_min_occlusion: float = 0.5
@@ -51,6 +55,11 @@ class QualityParams:
     gate_factor: float = 0.2
     heuristic_head_factor: float = 0.85  # score multiplier for heuristic head boxes
     fallback_visibility: float = 0.1     # visibility assigned to gd_fallback heads (detector found no head)
+    min_head_width_px: float = 96.0      # median head width below this -> resolution warning
+
+    def __post_init__(self) -> None:
+        if self.blur_ref_mode not in ("adaptive", "absolute"):
+            raise ValueError("blur_ref_mode must be 'adaptive' or 'absolute'")
 
 
 @dataclass

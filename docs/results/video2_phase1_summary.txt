@@ -1,0 +1,28 @@
+horse_reid Phase 1 summary
+==========================
+mode:                 reselect at 2026-10-01T22:46:34Z (selection re-run on stored detections/scores; detection not re-run)
+scores:               rescored with current weights
+input:                data/input/1000018057.mp4
+video:                720x1280 (rotation 90), 30.00 fps, 868 frames
+device:               cpu
+frames processed:     868
+frames with horse:    758
+head stride:          3 (290 frames ran the head stage)
+frames with head:     251 (primary track group)
+selected frames:      30 of 30 requested (min_score 0.35: 203 of 251 candidates pass)
+primary track id:     1 (length 600, group [1, 64, 68, 101], all horse tracks [1, 36, 61, 64, 68, 101])
+min gap (frames):     12
+selected time range:  0.40s - 18.80s (64% of 28.9s video)
+mean score (cands):   0.5504
+mean score (selected):0.6867
+yaw bins candidates:  {'profile': 200, 'three_quarter': 44, 'frontal': 7}
+yaw bins selected:    {'profile': 22, 'three_quarter': 5, 'frontal': 3}
+head methods:         {'grounding_dino': 249, 'mask_top_heuristic(gd_fallback)': 2} (frames per method, primary track group)
+yaw sources:          {'landmarks': 248, 'appearance': 3}
+mean visibility:      cands 0.9576, selected 0.9948
+blur_ref:             20.0 (adaptive)
+median_head_px:       56x84
+quality warning: median head width 56 px < 96 px — too small for reliable white-marking segmentation
+original run:         wall time 798.81s (1.09 frames/s), primary track 1, 0 selected
+reselect wall time:   3.05s
+stage timing (s):     original run {'model_load': 0.444, 'decode': 2.231, 'detect_track': 97.629, 'head': 685.903, 'quality': 0.208, 'visualize': 10.453, 'select': 0.007, 'write': 0.06, 'total_wall': 798.813}

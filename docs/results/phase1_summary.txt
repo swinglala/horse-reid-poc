@@ -1,6 +1,6 @@
 horse_reid Phase 1 summary
 ==========================
-mode:                 reselect at 2026-10-01T17:21:24Z (selection re-run on stored detections/scores; detection not re-run)
+mode:                 reselect at 2026-10-01T22:46:42Z (selection re-run on stored detections/scores; detection not re-run)
 scores:               rescored with current weights
 input:                data/input/1000018050.mp4
 video:                720x1280 (rotation 90), 30.00 fps, 1005 frames
@@ -9,17 +9,19 @@ frames processed:     1005
 frames with horse:    965
 head stride:          3 (335 frames ran the head stage)
 frames with head:     304 (primary track group)
-selected frames:      30 of 30 requested (min_score 0.35: 168 of 304 candidates pass)
+selected frames:      30 of 30 requested (min_score 0.35: 253 of 304 candidates pass)
 primary track id:     69 (length 658, group [1, 57, 69, 79, 654], all horse tracks [1, 54, 57, 69, 79, 186, 386, 555, 590, 622, 627, 634, 654])
 min gap (frames):     15
-selected time range:  0.00s - 33.10s (99% of 33.5s video)
-mean score (cands):   0.4445
-mean score (selected):0.7288
+selected time range:  0.00s - 33.00s (99% of 33.5s video)
+mean score (cands):   0.6471
+mean score (selected):0.8113
 yaw bins candidates:  {'three_quarter': 139, 'frontal': 25, 'profile': 140}
-yaw bins selected:    {'three_quarter': 11, 'profile': 14, 'frontal': 5}
+yaw bins selected:    {'three_quarter': 9, 'profile': 14, 'frontal': 7}
 head methods:         {'grounding_dino': 289, 'mask_top_heuristic(gd_fallback)': 15} (frames per method, primary track group)
 yaw sources:          {'landmarks': 271, 'appearance': 33}
-mean visibility:      cands 0.822, selected 0.9567
+mean visibility:      cands 0.822, selected 0.9483
+blur_ref:             34.662 (adaptive)
+median_head_px:       104x172
 original run:         wall time 1219.15s (0.82 frames/s), primary track 1, 19 selected
-reselect wall time:   2.79s
+reselect wall time:   2.76s
 stage timing (s):     original run {'model_load': 0.314, 'decode': 3.563, 'detect_track': 132.963, 'head': 1065.266, 'quality': 0.385, 'write': 2.025, 'visualize': 13.379, 'select': 0.004, 'total_wall': 1219.152}

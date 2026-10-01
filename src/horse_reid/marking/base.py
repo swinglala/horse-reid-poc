@@ -9,6 +9,15 @@ from typing import Any, Optional
 import numpy as np
 
 
+def coat_class(coat_L_median: float) -> str:
+    """Coat brightness class from the median face L (0..100 scale): dark < 45 <= medium < 65 <= light."""
+    if coat_L_median < 45:
+        return "dark"
+    if coat_L_median < 65:
+        return "medium"
+    return "light"
+
+
 @dataclass
 class MarkingResult:
     """Output of a :class:`HorseMarkingSegmenter` on one face crop.

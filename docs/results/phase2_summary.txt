@@ -2,12 +2,14 @@ horse_reid Phase 2 (white-marking) summary
 ==========================================
 segmenter:            sam_refined (methods {'sam_refined': 30})
 frames processed:     30 / 30 selected
-frames with marking:  9
-mean marking area:    0.23% of face (all frames)
-mean area (marked):   0.77% of face (frames with marking)
-yaw bins (marked/all): frontal: 3/5, profile: 2/14, three_quarter: 4/11
-excluded regions:     {'too_small': 324, 'outside_landmark_hull': 31, 'edge_fragment': 37, 'strap_shape': 36, 'sam_flood': 11, 'above_ears': 7, 'low_solidity': 31}
+frames with marking:  8
+mean marking area:    0.22% of face (all frames)
+mean area (marked):   0.83% of face (frames with marking)
+yaw bins (marked/all): frontal: 3/7, profile: 3/14, three_quarter: 2/9
+excluded regions:     {'too_small': 322, 'outside_landmark_hull': 29, 'edge_fragment': 40, 'strap_shape': 38, 'sam_flood': 11, 'above_ears': 7, 'low_solidity': 32}
 face mask sources:    {'seg': 30}
+coat classes:         {'dark': 24, 'medium': 6}
+applicability:        white-marking applicable
 device:               cpu
-wall time:            34.58s
-stage timing (s):     {'model_load': 0.0, 'decode': 2.623, 'face_region': 4.276, 'segment': 25.848, 'write': 0.79, 'total_wall': 34.577}
+wall time:            31.54s
+stage timing (s):     {'model_load': 0.0, 'decode': 2.532, 'face_region': 4.027, 'segment': 23.277, 'write': 0.703, 'total_wall': 31.542}

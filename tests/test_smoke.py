@@ -275,7 +275,93 @@ def test_select_frames_min_score() -> None:
     assert len(sel) == 5 and all(s.score >= 0.35 for s in sel)
     sel = select_frames(good + junk, num_frames=10, min_gap_frames=5, min_score=0.0)
     assert len(sel) == 10
-    assert select_frames(junk, num_frames=3) == []
+    # no candidate passes -> low-quality fallback still returns frames, flagged
+    sel = select_frames(junk, num_frames=3)
+    assert len(sel) == 3 and sel.low_quality and "only 0 of 20" in sel.reason
+    assert select_frames(junk, num_frames=3, low_quality_fallback=False) == []
+    assert not select_frames(good + junk, num_frames=10, min_gap_frames=5).low_quality
+
+
+def test_select_frames_low_quality_fallback() -> None:
+    # 2 of 40 pass (< min(30, 5)) -> fallback ranks everything, keeps gap/diversity rules
+    cands = [_fs(i * 10, 0.1 + (i % 7) * 0.01, yaw=(80.0 if i % 4 == 0 else 10.0)) for i in range(40)]
+    cands[3].score = cands[17].score = 0.6
+    sel = select_frames(cands, num_frames=30, min_gap_frames=20)
+    assert sel.low_quality and sel.n_pass == 2 and sel.n_candidates == 40
+    assert "only 2 of 40 candidates" in sel.reason
+    frames = [s.frame for s in sel]
+    assert len(frames) >= 15 and all(b - a >= 20 for a, b in zip(frames, frames[1:]))
+    assert 30 in frames and 170 in frames  # the two passing frames are still picked
+    # 5 passing (= min(30, 5)) -> no fallback, only the passing ones
+    for i in (5, 9, 25):
+        cands[i].score = 0.6
+    sel = select_frames(cands, num_frames=30, min_gap_frames=20)
+    assert not sel.low_quality and len(sel) == 5 and sel.reason is None
+
+
+def _blur_fs(frame: int, blur_var: float) -> FrameScore:
+    fs = _fs(frame, 0.0, yaw=10.0)
+    fs.blur_var = blur_var
+    fs.head_method, fs.head_conf, fs.visibility = "grounding_dino", 0.6, 0.9
+    fs.extra = {"keypoints": {"eye": [[2.0, 2.0, 0.9]], "nose": [[3.0, 3.0, 0.9]]}}
+    return fs
+
+
+def test_adaptive_blur_ref_scale_invariant() -> None:
+    from horse_reid.config import QualityParams, QualityWeights
+    from horse_reid.quality.scorer import rescore_all, resolve_blur_ref
+
+    rng = np.random.default_rng(3)
+    base = rng.lognormal(mean=np.log(400.0), sigma=0.6, size=200)  # far median ~40 > blur_ref_min
+    near = [_blur_fs(i, float(v)) for i, v in enumerate(base)]
+    far = [_blur_fs(i, float(v) / 10.0) for i, v in enumerate(base)]  # far-away horse: 10x lower
+    p, w = QualityParams(), QualityWeights()
+    assert p.blur_ref_mode == "adaptive"
+    ref_near, ref_far = rescore_all(near, p, w), rescore_all(far, p, w)
+    assert ref_near == pytest.approx(float(np.median(base)))
+    assert ref_far == pytest.approx(max(20.0, float(np.median(base)) / 10.0))
+    bn = np.array([s.blur for s in near])
+    bf = np.array([s.blur for s in far])
+    assert np.median(bn) == pytest.approx(1 - np.exp(-1), abs=0.01)
+    assert np.all(np.abs(np.sort(bn) - np.sort(bf)) < 0.05)  # similar blur-score distributions
+    assert np.mean([s.blur < p.gate_min_blur for s in far]) < 0.1
+    # absolute mode penalises the far run
+    pa = QualityParams(blur_ref_mode="absolute")
+    assert rescore_all(far, pa, w) == 150.0
+    assert np.median([s.blur for s in far]) < 0.3  # vs ~0.63 adaptive: absolute penalises far runs
+    # floor: a uniformly tiny blur_var is not normalised below blur_ref_min
+    assert resolve_blur_ref([1.0, 2.0, 3.0], p) == 20.0
+    assert resolve_blur_ref([], p) == p.blur_ref
+    with pytest.raises(ValueError):
+        QualityParams(blur_ref_mode="nope")
+
+
+def test_absolute_blur_mode_unchanged() -> None:
+    from horse_reid.config import QualityParams, QualityWeights
+    from horse_reid.quality.metrics import blur_variance
+    from horse_reid.quality.scorer import FrameQualityScorer, rescore
+
+    frame = np.zeros((400, 400, 3), np.uint8)
+    frame[100:300, 100:300] = _textured(200, 200, seed=4)
+    horse = Detection(0, 1, (50, 50, 350, 350), 0.9, "horse")
+    from horse_reid.types import HeadDetection
+    head = HeadDetection((100, 100, 300, 300), 0.6, "grounding_dino",
+                         {"eye": [[150.0, 150.0, 0.9]], "nose": [[200.0, 250.0, 0.9]]})
+    pa = QualityParams(blur_ref_mode="absolute")
+    fs = FrameQualityScorer(QualityWeights(), pa).score(frame, horse, head)
+    var = blur_variance(frame[100:300, 100:300])
+    assert fs.blur_var == pytest.approx(var)
+    assert fs.blur == pytest.approx(1 - np.exp(-var / 150.0))
+    score0, blur0 = fs.score, fs.blur
+    rescore(fs, pa, QualityWeights())
+    assert fs.blur == pytest.approx(blur0) and fs.score == pytest.approx(score0)
+
+
+def test_contact_sheet_title() -> None:
+    items = [(_textured(100, 80, seed=i), ["LOW QUALITY frame: 1", "score: 0.1"]) for i in range(2)]
+    plain = make_contact_sheet(items)
+    titled = make_contact_sheet(items, title="LOW QUALITY selection")
+    assert titled.shape[0] > plain.shape[0] and titled.shape[1] == plain.shape[1]
 
 
 def test_reselect_rewrites_outputs(tmp_path: Path) -> None:
@@ -300,7 +386,8 @@ def test_reselect_rewrites_outputs(tmp_path: Path) -> None:
     def fsd(frame: int, tid: int, score: float) -> dict:
         d = _fs(frame, score, yaw=20.0).to_dict()
         q = score  # component quality drives the rescored score
-        d.update(size=q, blur=q, exposure=q, occlusion=q, view=q, det_conf=q, visibility=q)
+        d.update(size=q, blur=q, exposure=q, occlusion=q, view=q, det_conf=q, visibility=q,
+                 blur_var=float(-150.0 * np.log(1.0 - q)))  # raw blur_var consistent with blur=q @ ref 150
         d.update(track_id=tid, time_s=frame / 10, horse_bbox=[0, 0, 40, 40], head_bbox=[5, 5, 20, 20],
                  extra={"yaw_source": "landmarks", "keypoints": {"eye": [[10.0, 10.0, 0.9]]}})
         return d
@@ -318,7 +405,9 @@ def test_reselect_rewrites_outputs(tmp_path: Path) -> None:
         "primary_track_group": [1], "min_gap_frames": 3, "head_stride": 3, "selected": [30, 33],
         "timing_s": {"total_wall": 123.0}, "summary": summary, "scores": scores}))
 
-    cfg = PipelineConfig(input=vid, output=out, num_frames=5, min_frame_gap=3)
+    from horse_reid.config import QualityParams
+    absq = QualityParams(blur_ref_mode="absolute")
+    cfg = PipelineConfig(input=vid, output=out, num_frames=5, min_frame_gap=3, quality=absq)
     res = run_reselect(cfg)
     assert res["primary_track_id"] == 7 and res["primary_track_group"] == [1, 7]
     assert res["selected"] == 5 and res["num_frames_requested"] == 5
@@ -336,12 +425,16 @@ def test_reselect_rewrites_outputs(tmp_path: Path) -> None:
     assert "mode:                 reselect" in txt and "original run:" in txt and "123.0s" in txt
     assert "5 of 5 requested" in txt
     assert "rescored with current weights" in txt and doc["reselect"]["rescored"] is True
+    assert doc["low_quality_selection"] is False and res["low_quality_selection"] is False
+    assert doc["config"]["blur_ref_used"] == 150.0 and "blur_ref:             150.0 (absolute)" in txt
+    assert res["median_head_px"] == "15x15" and "median_head_px:       15x15" in txt
+    assert "quality warning: median head width 15 px < 96 px" in txt
     s0 = next(s for s in doc["scores"] if s["frame"] == 3)
     assert s0["extra"]["score_original"] == 0.8 and s0["score"] == pytest.approx(0.8)
 
     # changing weights changes the rescored score; score_original is not overwritten
     from horse_reid.config import QualityWeights
-    cfg2 = PipelineConfig(input=vid, output=out, num_frames=5, min_frame_gap=3,
+    cfg2 = PipelineConfig(input=vid, output=out, num_frames=5, min_frame_gap=3, quality=absq,
                           weights=QualityWeights(size=0.0, blur=0.0, exposure=0.0, occlusion=0.0,
                                                  view=0.0, det_conf=0.0, visibility=1.0))
     run_reselect(cfg2)
@@ -356,3 +449,16 @@ def test_reselect_rewrites_outputs(tmp_path: Path) -> None:
     before = rescore(fs, PipelineConfig().quality, PipelineConfig().weights).score
     after = rescore(fs, PipelineConfig().quality, cfg2.weights).score
     assert before != pytest.approx(after)
+
+    # adaptive mode (default): blur is re-normalised by the run median; with a raised
+    # min_score nothing passes -> low-quality fallback, flagged everywhere
+    cfg3 = PipelineConfig(input=vid, output=out, num_frames=5, min_frame_gap=3, min_score=0.99)
+    res3 = run_reselect(cfg3)
+    doc3 = json.loads((out / "frame_scores.json").read_text())
+    txt3 = (out / "summary.txt").read_text()
+    assert res3["selected"] == 5 and res3["low_quality_selection"] is True
+    assert "only 0 of 11 candidates" in res3["low_quality_reason"]
+    assert doc3["low_quality_selection"] is True and doc3["summary"]["low_quality_selection"] is True
+    assert doc3["config"]["blur_ref_used"] == pytest.approx(241.4, abs=0.1)  # median blur_var (q=0.8)
+    assert "quality warning: low-quality selection: only 0 of 11" in txt3
+    assert "(adaptive)" in txt3

@@ -21,6 +21,7 @@ from tqdm import tqdm
 from .config import resolve_project_path
 from .device import select_device
 from .marking import FaceRegionExtractor, build_marking_segmenter
+from .marking.base import coat_class
 from .marking.visualize import four_panel, mask_overlay
 from .quality.metrics import yaw_bin
 from .video import VideoReader
@@ -176,8 +177,11 @@ def run_phase2(cfg: MarkingConfig) -> dict[str, Any]:
             ]))
             timing["write"] += time.time() - t0
 
+    app = assess_applicability(results)
     t0 = time.time()
-    make_contact_sheet(sheet_items, save_path=md / "marking_sheet.jpg")
+    make_contact_sheet(sheet_items, save_path=md / "marking_sheet.jpg",
+                       title=None if app["white_marking_applicable"] else
+                       "WHITE-MARKING NOT APPLICABLE: light coat")
     timing["write"] += time.time() - t0
     wall = time.time() - t_start
     timing["total_wall"] = wall
@@ -199,16 +203,40 @@ def run_phase2(cfg: MarkingConfig) -> dict[str, Any]:
         "yaw_bins": {b: {"frames": bins_all[b], "with_marking": bins_mark.get(b, 0)} for b in bins_all},
         "excluded_reasons": dict(excl),
         "face_mask_sources": dict(Counter(r["face_mask_source"] for r in results)),
+        "coat_class_counts": app["coat_class_counts"],
+        "white_marking_applicable": app["white_marking_applicable"],
+        "applicability_reason": app["reason"],
         "device": device,
         "wall_time_s": round(wall, 2),
         "timing_s": {k: round(v, 3) for k, v in timing.items()},
     }
     with open(md / "marking_results.json", "w") as f:
-        json.dump({"config": cfg.to_dict(), "video": str(video), "summary": summary, "frames": results},
+        json.dump({"white_marking_applicable": app["white_marking_applicable"], "reason": app["reason"],
+                   "coat_class_counts": app["coat_class_counts"],
+                   "config": cfg.to_dict(), "video": str(video), "summary": summary, "frames": results},
                   f, indent=1, ensure_ascii=False)
     _write_summary(md / "summary.txt", summary)
     logger.info("Phase 2 done in %.1fs -> %s", wall, md)
     return summary
+
+
+def assess_applicability(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate per-frame ``coat_class``; white markings are not applicable if >= 50% of frames are light."""
+    classes = []
+    for r in results:
+        st = r.get("stats", {})
+        c = st.get("coat_class")
+        if c is None and st.get("coat_L_median") is not None:
+            c = coat_class(float(st["coat_L_median"]))
+        if c is not None:
+            classes.append(c)
+    counts = dict(Counter(classes))
+    n, light = len(classes), counts.get("light", 0)
+    applicable = not (n > 0 and light / n >= 0.5)
+    reason = None if applicable else (
+        f"light/grey coat (median L >= 65 in {light}/{n} frames): white markings cannot be separated "
+        "from the coat; use other cues (whorls, chestnuts, scars, muzzle pigmentation)")
+    return {"white_marking_applicable": applicable, "reason": reason, "coat_class_counts": counts}
 
 
 def _write_summary(path: Path, s: dict[str, Any]) -> None:
@@ -228,6 +256,9 @@ def _write_summary(path: Path, s: dict[str, Any]) -> None:
                                              for b, v in sorted(s["yaw_bins"].items())),
         f"excluded regions:     {s['excluded_reasons']}",
         f"face mask sources:    {s['face_mask_sources']}",
+        f"coat classes:         {s['coat_class_counts']}",
+        "applicability:        " + ("white-marking applicable" if s["white_marking_applicable"]
+                                    else "NOT APPLICABLE - " + str(s["applicability_reason"])),
         f"device:               {s['device']}",
         f"wall time:            {s['wall_time_s']}s",
         f"stage timing (s):     {s['timing_s']}",

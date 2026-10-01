@@ -13,7 +13,7 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 
-from .base import HorseMarkingSegmenter, MarkingResult, full_face_mask
+from .base import HorseMarkingSegmenter, MarkingResult, coat_class, full_face_mask
 
 MAD_TO_SIGMA = 1.4826
 log = logging.getLogger(__name__)
@@ -376,6 +376,7 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
             "marking_area_frac": round(float(mask.sum()) / max(face_area, 1), 6),
             "n_components": len(components),
             "coat_L_median": round(med, 3),
+            "coat_class": coat_class(med),
             "coat_L_mad": round(mad, 3),
             "face_area_px": face_area,
             "illumination": illum_mode,
