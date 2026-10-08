@@ -100,6 +100,11 @@ class FaceRegionExtractor:
             return None
         h_img, w_img = frame.shape[:2]
         hb = clip_bbox(tuple(int(v) for v in horse_bbox), w_img, h_img)  # type: ignore[arg-type]
+        # The tracker's horse box can be narrower than the head (e.g. a handler
+        # standing next to the face truncates it). The seg mask is returned in
+        # horse-box coordinates, so widen the box to cover the whole head crop;
+        # otherwise the part of the face outside the horse box is cut off.
+        hb = clip_bbox((min(hb[0], cb[0]), min(hb[1], cb[1]), max(hb[2], cb[2]), max(hb[3], cb[3])), w_img, h_img)
         hm = seg.horse_mask(frame, hb)
         if hm is None:
             return None

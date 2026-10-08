@@ -57,85 +57,109 @@
     },
     "canonical_peaks": [
       {
+        "x": 125,
+        "y": 85,
+        "support_s": 0.0784,
+        "support": 0.117,
+        "prob": 0.1886,
+        "coverage": 0.95,
+        "n_support": 2,
+        "frames": [
+          828,
+          990
+        ],
+        "id": "p0"
+      },
+      {
+        "x": 103,
+        "y": 145,
+        "support_s": 0.0583,
+        "support": 0.0586,
+        "prob": 0.0887,
+        "coverage": 0.9796,
+        "n_support": 1,
+        "frames": [
+          828
+        ],
+        "id": "p1"
+      },
+      {
+        "x": 104,
+        "y": 109,
+        "support_s": 0.0573,
+        "support": 0.0574,
+        "prob": 0.0475,
+        "coverage": 1.0,
+        "n_support": 1,
+        "frames": [
+          828
+        ],
+        "id": "p2"
+      },
+      {
         "x": 150,
-        "y": 34,
-        "support_s": 0.0455,
+        "y": 35,
+        "support_s": 0.0451,
         "support": 0.0468,
-        "prob": 0.1392,
+        "prob": 0.117,
         "coverage": 0.7651,
         "n_support": 1,
         "frames": [
           843
         ],
-        "id": "p0"
+        "id": "p3"
       },
       {
-        "x": 96,
-        "y": 58,
-        "support_s": 0.0341,
-        "support": 0.0674,
-        "prob": 0.1674,
+        "x": 46,
+        "y": 75,
+        "support_s": 0.0386,
+        "support": 0.0479,
+        "prob": 0.0308,
         "coverage": 0.9796,
-        "n_support": 3,
+        "n_support": 1,
         "frames": [
-          363,
-          558,
-          576
+          363
         ],
-        "id": "p1"
+        "id": "p4"
       },
       {
-        "x": 113,
-        "y": 52,
-        "support_s": 0.0329,
+        "x": 114,
+        "y": 51,
+        "support_s": 0.03,
         "support": 0.0469,
-        "prob": 0.1284,
+        "prob": 0.1119,
         "coverage": 1.0,
         "n_support": 1,
         "frames": [
           363
         ],
-        "id": "p2"
+        "id": "p5"
       },
       {
-        "x": 77,
-        "y": 196,
-        "support_s": 0.0325,
-        "support": 0.033,
-        "prob": 0.0535,
-        "coverage": 0.9796,
-        "n_support": 1,
-        "frames": [
-          558
-        ],
-        "id": "p3"
-      },
-      {
-        "x": 125,
-        "y": 85,
-        "support_s": 0.0281,
-        "support": 0.0565,
-        "prob": 0.1863,
-        "coverage": 0.95,
-        "n_support": 2,
-        "frames": [
-          975,
-          990
-        ],
-        "id": "p4"
-      },
-      {
-        "x": 155,
-        "y": 73,
-        "support_s": 0.0256,
+        "x": 154,
+        "y": 72,
+        "support_s": 0.0259,
         "support": 0.0441,
-        "prob": 0.1429,
+        "prob": 0.144,
         "coverage": 0.7651,
         "n_support": 1,
         "frames": [
           576
         ],
-        "id": "p5"
+        "id": "p6"
+      },
+      {
+        "x": 108,
+        "y": 287,
+        "support_s": 0.0239,
+        "support": 0.0573,
+        "prob": 0.0574,
+        "coverage": 0.9458,
+        "n_support": 1,
+        "frames": [
+          0
+        ],
+        "id": "p7"
       }
     ],
     "params": {
@@ -150,19 +174,19 @@
     "stats": {
       "mask_px": 0,
       "observed_px": 81920,
-      "mean_consistency_observed": 0.9062,
-      "n_peaks": 6,
-      "n_peaks_multi": 2,
+      "mean_consistency_observed": 0.9053,
+      "n_peaks": 8,
+      "n_peaks_multi": 1,
       "peak_sigma": 4.0,
       "min_support": 0.02,
-      "max_support": 0.0807,
+      "max_support": 0.117,
       "max_n_support": 2,
       "joined_frames": 30,
       "skipped_frames": [
         648
       ]
     },
-    "created_utc": "2026-10-01T22:51:27+00:00",
+    "created_utc": "2026-10-08T10:38:00+00:00",
     "notes": [
       "Aggregation of REAL observations only: no generated, in-painted or mirrored face; unobserved canonical pixels have coverage 0.",
       "canonical_marking_mask is the PRIMARY identity evidence; face_embedding is an auxiliary descriptor.",

@@ -10,7 +10,7 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 
-from .adaptive_color import AdaptiveColorSegmenter, contour_shape, coat_zmap, region_info
+from .adaptive_color import AdaptiveColorSegmenter, contour_shape, coat_zmap, face_axis, region_axis_angle, region_info
 from .base import HorseMarkingSegmenter, MarkingResult, full_face_mask
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,8 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
                  device: str = "cpu", max_components: int = 5, max_area_frac: float = 0.20,
                  min_mean_z: float = 1.5, min_iou: float = 0.3, iou_dilate_px: int = 5,
                  neg_z_max: float = 0.5, neg_min_dist_frac: float = 0.15, strap_elongation: float = 6.25,
-                 strap_min_len_frac: float = 0.25, strap_max_thick_frac: float = 0.15) -> None:
+                 strap_min_len_frac: float = 0.25, strap_max_thick_frac: float = 0.15,
+                 stripe_axis_max_deg: float = 30.0, strong_z: float = 6.5, strong_area_frac: float = 0.01) -> None:
         self.base = base if base is not None else AdaptiveColorSegmenter()
         self.sam_weights = Path(sam_weights)
         self.device = device
@@ -66,6 +67,11 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
         self.strap_elongation = strap_elongation
         self.strap_min_len_frac = strap_min_len_frac
         self.strap_max_thick_frac = strap_max_thick_frac
+        # A strongly white (strong_z, strong_area_frac) candidate whose SAM mask runs along the
+        # face axis is a blaze, not a strap; weaker axis-aligned strips (coat sheen) stay straps.
+        self.stripe_axis_max_deg = stripe_axis_max_deg
+        self.strong_z = strong_z
+        self.strong_area_frac = strong_area_frac
         self._sam: Any = None
 
     # ------------------------------------------------------------------ #
@@ -154,7 +160,7 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
             base.stats["sam_calls"] = 0
             return base
         try:
-            return self._refine(image, fm, base, n, labels)
+            return self._refine(image, fm, base, n, labels, keypoints)
         except Exception as e:  # SAM load / inference failure -> degrade gracefully
             logger.warning("SAM refinement failed (%s); returning %s result", e, base.method)
             base.stats["sam_error"] = str(e)
@@ -163,7 +169,8 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
             return base
 
     def _refine(self, image: np.ndarray, fm: np.ndarray, base: MarkingResult, n: int,
-                labels: np.ndarray) -> MarkingResult:
+                labels: np.ndarray, keypoints: Optional[dict] = None) -> MarkingResult:
+        axis = face_axis(keypoints)
         z = base.debug.get("z")
         if z is None or z.shape != fm.shape:
             z, _, _ = coat_zmap(image, fm)
@@ -207,8 +214,13 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
                         "sam_iou": round(iou, 3), "sam_elongation": round(elong, 2),
                         "sam_length": round(length, 1), "sam_thickness": round(thick, 1),
                         "sam_points": pts, "sam_labels": lbl}
+            axis_deg = region_axis_angle(sm, axis) if sm.any() else 90.0
+            strong = bool(region.sum() >= self.strong_area_frac * face_area and float(z[region].mean()) >= self.strong_z)
+            sam_info["sam_axis_deg"] = round(axis_deg, 1)
+            sam_info["strong"] = strong
             strap_like = (elong > self.strap_elongation and length > self.strap_min_len_frac * face_w
-                          and thick < self.strap_max_thick_frac * face_w)
+                          and thick < self.strap_max_thick_frac * face_w
+                          and not (strong and axis_deg <= self.stripe_axis_max_deg))
             if strap_like:
                 excluded.append(region_info(region, face_area, z, reason="strap_shape", strap_source="sam",
                                             **sam_info))

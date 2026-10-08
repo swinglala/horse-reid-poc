@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from typing import Any, Optional
 
 import cv2
+import math
+
 import numpy as np
 
 from .base import HorseMarkingSegmenter, MarkingResult, coat_class, full_face_mask
@@ -42,6 +44,12 @@ class AdaptiveColorParams:
     local_kernel_frac: float = 0.25    # illumination kernel size / face-mask width (min 15 px, odd)
     min_area_frac_local: float = 0.0008  # of face area, replaces min_area_frac when local illumination is on
     solidity_min: float = 0.55         # area / convex hull area ("low_solidity")
+    strong_z: float = 6.5              # a component this far above the coat and ...
+    strong_area_frac: float = 0.01     # ... covering this fraction of the face is a "strong" white region
+                                       # (white hair; coat sheen and halter webbing stay below ~6 z)
+    stripe_axis_max_deg: float = 30.0  # a strong elongated component whose long axis is within this angle of
+                                       # the face axis (ear/eye midpoint -> nose) is a blaze/stripe, not a strap
+    stripe_solidity_min: float = 0.35  # solidity floor for strong regions (blazes taper, bend, get cut by straps)
     edge_margin_px: int = 2            # component within this many px of the face-mask boundary ...
     edge_max_area_frac: float = 0.003  # ... and smaller than this face fraction -> "edge_fragment"
     eye_zone_frac: float = 0.08        # centroid within this x face width of an eye keypoint -> "eye_glint"
@@ -184,6 +192,35 @@ def blown_highlight_stats(region: np.ndarray, L: np.ndarray, chroma: np.ndarray,
     return 0.0, float(chroma[ring].mean() - chroma[region].mean())
 
 
+def face_axis(keypoints: Optional[dict]) -> tuple[float, float]:
+    """Unit vector of the face's long axis in image coordinates: from the mean
+    ear/eye keypoint to the mean nose keypoint. Falls back to straight down
+    (0, 1) - the head crops are roughly upright - when either end is missing."""
+    top = keypoint_xy(keypoints, "ear") + keypoint_xy(keypoints, "eye")
+    nose = keypoint_xy(keypoints, "nose")
+    if not top or not nose:
+        return 0.0, 1.0
+    tx, ty = float(np.mean([x for x, _ in top])), float(np.mean([y for _, y in top]))
+    nx, ny = float(np.mean([x for x, _ in nose])), float(np.mean([y for _, y in nose]))
+    dx, dy = nx - tx, ny - ty
+    n = math.hypot(dx, dy)
+    return (dx / n, dy / n) if n > 1e-6 else (0.0, 1.0)
+
+
+def region_axis_angle(region: np.ndarray, axis: tuple[float, float]) -> float:
+    """Angle in degrees (0..90) between the principal axis of a bool region
+    (PCA of its pixel coordinates) and ``axis``."""
+    ys, xs = np.nonzero(region)
+    if xs.size < 3:
+        return 90.0
+    pts = np.stack([xs - xs.mean(), ys - ys.mean()], axis=1).astype(np.float64)
+    cov = pts.T @ pts / pts.shape[0]
+    vals, vecs = np.linalg.eigh(cov)
+    v = vecs[:, int(np.argmax(vals))]
+    cos = abs(float(v[0] * axis[0] + v[1] * axis[1])) / max(float(np.hypot(*v)), 1e-9)
+    return float(math.degrees(math.acos(min(1.0, cos))))
+
+
 def region_info(region: np.ndarray, face_area: int, z: np.ndarray, chroma: Optional[np.ndarray] = None,
                 **extra: Any) -> dict[str, Any]:
     """Descriptor dict of a bool region (see :class:`MarkingResult`)."""
@@ -253,11 +290,18 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
        prob up to the chroma factor.)
     4. Component filters: ``too_small``, ``high_chroma`` (mean chroma >
        ``chroma_max``), ``strap_shape`` (min-area-rect long/short > 4 and long
-       side > 25 % of the face-mask width: halter / noseband straps).
+       side > 25 % of the face-mask width: halter / noseband straps). A
+       *strong* elongated component (>= ``strong_area_frac`` of the face and
+       mean z >= ``strong_z``) whose principal axis lies within
+       ``stripe_axis_max_deg`` of the face axis (ear/eye midpoint -> nose) is a
+       blaze / stripe, not a strap: straps cross the face, blazes run along it.
+       ``low_solidity`` (area / convex hull < ``solidity_min``) uses the lower
+       ``stripe_solidity_min`` for strong components (blazes taper and bend).
     5. Anatomy / exposure gates: ``above_ears`` (centroid above the lowest ear
        keypoint or near any ear keypoint; face markings lie below the ear
        bases) and ``blown_highlight`` (HEURISTIC, TODO: trained model: >= 50 %
-       sensor-clipped pixels, or a bright core in a strongly coloured lit halo).
+       sensor-clipped pixels, or a bright core in a strongly coloured lit halo;
+       strong components are exempt: large white hair clips in direct sun).
     """
 
     name = "adaptive_color"
@@ -312,6 +356,7 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
         ear_line = (max(ey for _, ey in ears) + p.ear_line_margin_frac * face_h) if ears else None
         L255 = L * 2.55
         hull_mask = landmark_hull_mask(keypoints, (h, w), p.hull_margin_frac * face_w)
+        axis = face_axis(keypoints)
         n_kp = sum(len(keypoint_xy(keypoints, n)) for n in ("ear", "eye", "nose"))
         mask = np.zeros((h, w), np.uint8)
         excl_mask = np.zeros((h, w), np.uint8)
@@ -323,14 +368,20 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
             reason: Optional[str] = None
             long_side, short_side = rect_sides(region)
             mean_chroma = float(chroma[region].mean())
+            elongated = short_side > 0 and long_side / short_side > p.strap_ratio and long_side > p.strap_min_len_frac * face_w
+            strong = bool(area >= p.strong_area_frac * face_area and z[region].mean() >= p.strong_z)
+            axis_deg = region_axis_angle(region, axis) if elongated else None
+            # Halter / noseband straps cross the face; a blaze or stripe runs along it. Only a
+            # strongly white strip qualifies: sunlit sheen along the nasal bone is axis-aligned too.
+            stripe = bool(elongated and strong and axis_deg is not None and axis_deg <= p.stripe_axis_max_deg)
             if area < min_area:
                 reason = "too_small"
             elif mean_chroma > p.chroma_max:
                 reason = "high_chroma"
-            elif short_side > 0 and long_side / short_side > p.strap_ratio and long_side > p.strap_min_len_frac * face_w:
+            elif elongated and not stripe:
                 reason = "strap_shape"
             sol = solidity(region)
-            if reason is None and sol < p.solidity_min:
+            if reason is None and sol < (p.stripe_solidity_min if strong else p.solidity_min):
                 reason = "low_solidity"
             if reason is None and area < p.edge_max_area_frac * face_area and bool(
                     (cv2.dilate(region.astype(np.uint8), edge_k).astype(bool) & outside).any()):
@@ -349,14 +400,19 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
                 ys_, xs_ = np.nonzero(region)
                 if not hull_mask[min(int(round(ys_.mean())), h - 1), min(int(round(xs_.mean())), w - 1)]:
                     reason = "outside_landmark_hull"
+            exposure: dict[str, Any] = {}
             if reason is None:
                 clip = float((L255[region] >= p.clip_L).mean())
                 _, halo = blown_highlight_stats(region, L, chroma, z, p.halo_ring_px, p.halo_min_z)
-                if clip >= p.clip_frac_max or halo > p.halo_chroma_delta:
+                exposure = {"clip_frac": round(clip, 3), "halo_delta": round(halo, 2)}
+                # A large, strongly white, achromatic region clips in direct sun
+                # because it IS white hair; speculars on dark coat are small.
+                if not strong and (clip >= p.clip_frac_max or halo > p.halo_chroma_delta):
                     reason = "blown_highlight"
             info = region_info(region, face_area, z, chroma,
                                rect_long=round(long_side, 1), rect_short=round(short_side, 1),
-                               solidity=round(sol, 3))
+                               solidity=round(sol, 3), strong=strong, **exposure,
+                               **({"axis_deg": round(axis_deg, 1), "stripe": stripe} if axis_deg is not None else {}))
             if reason is None:
                 info["accepted_by"] = "candidate"
                 components.append(info)

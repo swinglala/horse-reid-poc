@@ -1,5 +1,7 @@
 .venv/
 data/input/*.mp4
+data/input/*.mov
+data/*.log
 data/output/
 data/output_*/
 models/*.pt

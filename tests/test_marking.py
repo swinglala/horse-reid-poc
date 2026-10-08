@@ -259,3 +259,113 @@ def test_coat_class_and_applicability() -> None:
     assert a["coat_class_counts"] == {"light": 3, "dark": 1}
     b = assess_applicability([{"stats": dark.stats}] * 3 + [{"stats": light.stats}])
     assert b["white_marking_applicable"] is True and b["reason"] is None
+
+
+# ---------------------------------------------------------------- stripe / strong gates
+
+
+def _coat(seed: int = 1) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    return np.clip(np.full((200, 200, 3), (25, 40, 70), np.float32) + rng.normal(0, 5, (200, 200, 3)),
+                   0, 255).astype(np.uint8)
+
+
+_FM = np.zeros((200, 200), bool)
+_FM[10:190, 20:180] = True
+_KPS_UPRIGHT = {"left_eye": [60.0, 40.0], "right_eye": [140.0, 40.0], "nose": [100.0, 180.0],
+                "left_ear": [50.0, 15.0], "right_ear": [150.0, 15.0]}
+
+
+def test_face_axis_and_region_axis_angle() -> None:
+    from horse_reid.marking.adaptive_color import face_axis, region_axis_angle
+
+    assert face_axis(_KPS_UPRIGHT) == pytest.approx((0.0, 1.0))
+    assert face_axis(None) == (0.0, 1.0)                       # fallback: upright crop
+    assert face_axis({"nose": [100.0, 10.0], "left_eye": [100.0, 110.0]}) == pytest.approx((0.0, -1.0))
+    vert = np.zeros((200, 200), bool); vert[60:150, 98:103] = True
+    horz = np.zeros((200, 200), bool); horz[160:164, 40:140] = True
+    assert region_axis_angle(vert, (0.0, 1.0)) < 5.0
+    assert region_axis_angle(horz, (0.0, 1.0)) > 85.0
+    assert region_axis_angle(horz, (1.0, 0.0)) < 5.0
+
+
+def test_stripe_along_face_axis_is_not_a_strap() -> None:
+    """A thin, strongly white strip along the ear/eye -> nose axis is a blaze and is kept;
+    the same strip across the face is a halter strap."""
+    img = _coat()
+    img[60:150, 98:103] = (240, 240, 240)   # along the axis (blaze)
+    img[160:164, 40:140] = (240, 240, 240)  # across the axis (noseband)
+    res = AdaptiveColorSegmenter().predict(img, _FM, _KPS_UPRIGHT)
+    assert len(res.components) == 1
+    c = res.components[0]
+    assert c["stripe"] is True and c["axis_deg"] < 5.0 and c["bbox"] == [98, 60, 103, 150]
+    straps = [e for e in res.excluded if e["reason"] == "strap_shape"]
+    assert len(straps) == 1 and straps[0]["bbox"] == [40, 160, 140, 164] and straps[0]["axis_deg"] > 85.0
+    assert res.mask[100, 100] and not res.mask[162, 90]
+
+    # Rotate the face axis (eyes left, nose right): the roles swap.
+    kps = {"left_eye": [40.0, 60.0], "right_eye": [40.0, 140.0], "nose": [180.0, 100.0]}
+    img = _coat()
+    img[98:103, 60:150] = (240, 240, 240)
+    img[40:140, 160:164] = (240, 240, 240)
+    res = AdaptiveColorSegmenter().predict(img, _FM, kps)
+    assert [c["bbox"] for c in res.components] == [[60, 98, 150, 103]]
+    assert [e["bbox"] for e in res.excluded if e["reason"] == "strap_shape"] == [[160, 40, 164, 140]]
+
+    # Without keypoints the axis falls back to vertical: horizontal strap still rejected.
+    res = AdaptiveColorSegmenter().predict(img, _FM)
+    assert "strap_shape" in res.stats["n_excluded_by_reason"]
+
+    # A mid-brightness strip along the axis (sunlit sheen on the nasal bone) is not strong -> still a strap.
+    img = _coat()
+    img[60:150, 98:103] = (120, 120, 120)
+    res = AdaptiveColorSegmenter().predict(img, _FM, _KPS_UPRIGHT)
+    [e] = res.excluded
+    assert e["reason"] == "strap_shape" and e["stripe"] is False and e["mean_z"] < 6.5
+
+
+def test_strong_white_region_skips_solidity_and_exposure_gates() -> None:
+    """A large, strongly white region (a sunlit blaze) may be concave and sensor-clipped;
+    the same shape at mid brightness is still rejected as low_solidity."""
+    def l_shape(col: tuple[int, int, int]) -> np.ndarray:
+        img = _coat()
+        img[60:150, 85:93] = col
+        img[142:150, 85:145] = col
+        return img
+
+    res = AdaptiveColorSegmenter().predict(l_shape((255, 255, 255)), _FM, _KPS_UPRIGHT)
+    assert len(res.components) == 1, res.stats["n_excluded_by_reason"]
+    c = res.components[0]
+    assert c["strong"] is True and c["solidity"] < 0.55 and c["clip_frac"] > 0.9
+    assert c["area_frac_of_face"] >= 0.01 and c["mean_z"] >= 6.5
+    assert "blown_highlight" not in res.stats["n_excluded_by_reason"]
+
+    res = AdaptiveColorSegmenter().predict(l_shape((120, 120, 120)), _FM, _KPS_UPRIGHT)
+    assert res.components == []
+    [e] = [e for e in res.excluded if e["area_px"] > 500]
+    assert e["reason"] == "low_solidity" and e["strong"] is False and e["mean_z"] < 6.5
+
+
+def test_face_mask_not_clipped_by_narrow_horse_box() -> None:
+    """The tracker's horse box can be narrower than the head (handler next to the face);
+    the seg mask must still cover the whole head crop."""
+    class FakeSeg:
+        def __init__(self) -> None:
+            self.calls: list[tuple[int, int, int, int]] = []
+
+        def horse_mask(self, frame: np.ndarray, hb: tuple[int, int, int, int]) -> np.ndarray:
+            self.calls.append(hb)
+            return np.ones((hb[3] - hb[1], hb[2] - hb[0]), bool)
+
+    frame = np.zeros((300, 400, 3), np.uint8)
+    ext = FaceRegionExtractor(seg_model_path="unused.pt", upscale=1.0)
+    ext._seg = FakeSeg()
+    horse_bbox = (50, 50, 220, 250)       # right edge x=220 ...
+    head_bbox = (180, 60, 260, 200)       # ... but the head extends to x=260
+    region = ext.extract(frame, horse_bbox, head_bbox, margin=0.0)
+    assert region.face_mask_source == "seg"
+    assert region.crop_bbox == (180, 60, 260, 200)
+    (hb,) = ext._seg.calls
+    assert hb[0] <= 50 and hb[2] >= 260 and hb[1] <= 50 and hb[3] >= 250
+    # The whole crop is horse pixels (fake mask is all-ones) - nothing is cut off at x=220.
+    assert region.face_mask.shape == (140, 80) and region.face_mask[:, 45:].mean() > 0.9

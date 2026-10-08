@@ -1,0 +1,25 @@
+horse_reid Phase 1 summary
+==========================
+input:                data/input/mal1.mov
+video:                2704x1520 (rotation 0), 60.79 fps, 66 frames
+device:               mps
+frames processed:     66
+frames with horse:    66
+head stride:          1 (66 frames ran the head stage)
+frames with head:     66 (primary track group)
+selected frames:      10 of 10 requested (min_score 0.35: 54 of 66 candidates pass)
+primary track id:     3 (length 66, group [3], all horse tracks [3])
+min gap (frames):     3
+selected time range:  0.03s - 1.07s (96% of 1.1s video)
+mean score (cands):   0.6472
+mean score (selected):0.785
+yaw bins candidates:  {'three_quarter': 49, 'profile': 4, 'frontal': 13}
+yaw bins selected:    {'three_quarter': 5, 'profile': 2, 'frontal': 3}
+head methods:         {'grounding_dino': 66} (frames per method, primary track group)
+yaw sources:          {'landmarks': 66}
+mean visibility:      cands 0.9255, selected 0.9739
+blur_ref:             30.6215 (adaptive)
+median_head_px:       95x208
+quality warning: median head width 95 px < 96 px — too small for reliable white-marking segmentation
+wall time:            243.11s (0.27 frames/s)
+stage timing (s):     {'model_load': 0.353, 'decode': 1.186, 'detect_track': 8.83, 'head': 218.007, 'quality': 0.087, 'visualize': 2.419, 'select': 0.007, 'write': 3.266, 'total_wall': 243.11}
