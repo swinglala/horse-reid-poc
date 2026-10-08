@@ -27,16 +27,19 @@ def main() -> int:
                    help="JSON spec with the diagram image and its 5 landmarks")
     p.add_argument("--scale", type=float, default=4.0, help="upscale factor for the drawing")
     p.add_argument("--min-support", type=float, default=0.15, help="support below this is not tinted")
-    p.add_argument("--no-landmarks", action="store_true")
+    p.add_argument("--landmarks", action="store_true", help="also mark the five alignment points")
+    p.add_argument("--peaks", action="store_true", help="also draw candidate peaks (circle + frame count)")
+    p.add_argument("--tint", action="store_true", help="also tint support >= --min-support (yellow..red)")
+    p.add_argument("--no-label", action="store_true")
     p.add_argument("--save", type=Path, default=None, help="default: <output>/reference/marking_on_diagram.png")
     a = p.parse_args()
 
     ref_dir = a.output / "reference"
     img, lm = load_diagram(a.diagram)
     maps = load_reference_maps(ref_dir)
-    label = f"{maps['horse_id']}  views={sum(maps['views'].values()) if maps['views'] else len(maps['frames'])}"
+    label = None if a.no_label else f"{maps['horse_id']}  views={sum(maps['views'].values()) if maps['views'] else len(maps['frames'])}"
     out, info = draw_on_diagram(img, lm, maps, scale=a.scale, min_support=a.min_support,
-                                show_landmarks=not a.no_landmarks, label=label)
+                                show_landmarks=a.landmarks, show_peaks=a.peaks, show_tint=a.tint, label=label)
     save = a.save or (ref_dir / "marking_on_diagram.png")
     save.parent.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(save), out)

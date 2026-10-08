@@ -521,10 +521,10 @@ canonical reference는 256x320 template 좌표계에 있다. 같은 다섯 기�
 |---|---|---|---|
 | ![v1](docs/results/phase3_marking_on_diagram.png) | ![v3](docs/results/video3_marking_on_diagram.png) | ![v4](docs/results/video4_marking_on_diagram.png) | ![v5](docs/results/video5_marking_on_diagram.png) |
 
-- 노란~빨간 색: `support` (accept된 mask가 그 픽셀을 덮은 프레임의 가중 비율, 0.15 이상만 표시). 흰 채움 + 검은 윤곽: support ≥ 0.5 (프레임 과반). 파란 원: candidate peak와 지지 프레임 수. 주황 점: 도면의 기준점, 주황 십자: template 기준점이 affine으로 옮겨진 위치.
+- 기본 출력은 흰 채움 + 검은 윤곽뿐이다: support ≥ 0.5, 즉 accept된 mask가 그 픽셀을 덮은 프레임의 가중 비율이 과반인 영역. 디버그용 표시는 옵션이다: `--tint` (support 0.15 이상을 노랑~빨강으로), `--peaks` (candidate peak 원 + 지지 프레임 수), `--landmarks` (도면 기준점 = 주황 점, template 기준점이 옮겨진 위치 = 주황 십자). peak 좌표는 표시 여부와 무관하게 `marking_on_diagram.json`에 기록된다.
 - 채움에 prob 기반 canonical mask를 쓰지 않는 이유: prob은 base 후보 확률이라 제외된 물체(영상 4의 흰 halter 코끈)도 밝게 남는다. support는 accept된 성분만 반영한다.
 - 다섯 기준점의 affine 잔차는 도면 px로 RMS 6.6 (눈이 template보다 바깥쪽에 그려져 있어 affine으로는 다 못 맞춤). 도면은 실측이 아니므로 위치는 대략적이며, 무늬의 모양은 planar mapper의 정렬 오차를 그대로 가진다 (영상 3의 blaze가 여러 갈래로 보이는 것).
-- 영상 1은 star가 1프레임에서만 accept돼 support 0.5를 넘는 픽셀이 없고, 작은 하이라이트 peak들만 원으로 표시된다. 영상 4·5는 이마 star가, 영상 3은 코등을 따라 내려가는 blaze가 도면에 그려진다.
+- 영상 1은 star가 1프레임에서만 accept돼 support 0.5를 넘는 픽셀이 없어 도면이 비어 있다 (`--peaks`를 주면 하이라이트 peak 원이 보인다). 영상 4·5는 이마 star가, 영상 3은 코등을 따라 내려가는 blaze가 도면에 그려진다.
 
 ## 6. 한계와 다음 단계
 

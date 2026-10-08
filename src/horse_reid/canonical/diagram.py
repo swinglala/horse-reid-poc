@@ -86,17 +86,19 @@ def _warp(a: np.ndarray, M: np.ndarray, size: tuple[int, int], nearest: bool = F
 
 def draw_on_diagram(diagram_bgr: np.ndarray, landmarks: dict[str, tuple[float, float]], maps: dict[str, Any],
                     scale: float = 4.0, min_support: float = 0.15, fill_support: float = 0.5,
-                    show_landmarks: bool = True, label: Optional[str] = None) -> tuple[np.ndarray, dict[str, Any]]:
+                    show_landmarks: bool = False, show_peaks: bool = False, show_tint: bool = False,
+                    label: Optional[str] = None) -> tuple[np.ndarray, dict[str, Any]]:
     """Warp the canonical ``support`` / ``mask`` / peaks onto ``diagram_bgr`` (upscaled by
     ``scale``). Returns ``(image, info)``; ``info`` has the affine, RMS residual and the
     peaks in diagram pixels.
 
-    Rendering: support >= ``min_support`` is tinted (yellow = weak .. red = strong, alpha
-    grows with support); support >= ``fill_support`` (accepted marking in at least that
-    weighted fraction of the frames) is filled white with a dark outline; peaks are circles
-    labelled with their frame count. The prob-based canonical mask is NOT used for the fill:
-    prob is the base candidate probability and also lights up rejected objects such as a
-    white halter.
+    Rendering (default): support >= ``fill_support`` (accepted marking in at least that
+    weighted fraction of the frames) is filled white with a black outline, nothing else.
+    Optional: ``show_tint`` tints support >= ``min_support`` (yellow = weak .. red =
+    strong), ``show_peaks`` draws the candidate peaks as circles labelled with their frame
+    count, ``show_landmarks`` marks the five alignment points. The prob-based canonical
+    mask is NOT used for the fill: prob is the base candidate probability and also lights
+    up rejected objects such as a white halter.
     """
     h, w = diagram_bgr.shape[:2]
     W, H = int(round(w * scale)), int(round(h * scale))
@@ -106,28 +108,29 @@ def draw_on_diagram(diagram_bgr: np.ndarray, landmarks: dict[str, tuple[float, f
 
     sup = _warp(maps["support"], M, (W, H))
     msk = sup >= fill_support
-    out = bg.astype(np.float32)
-    # support tint: colour from yellow (0,220,255 BGR) at min_support to red (0,0,230) at 1.0
-    t = np.clip((sup - min_support) / max(1e-6, 1.0 - min_support), 0, 1)
-    tint = np.stack([np.zeros_like(t), 220 * (1 - t), 255 * (1 - t) + 230 * t], axis=-1)
-    alpha = np.where(sup >= min_support, 0.35 + 0.5 * t, 0.0)[..., None]
-    out = out * (1 - alpha) + tint * alpha
-    out = out.round().astype(np.uint8)
+    out = bg.copy()
+    if show_tint:
+        # support tint: colour from yellow (0,220,255 BGR) at min_support to red (0,0,230) at 1.0
+        t = np.clip((sup - min_support) / max(1e-6, 1.0 - min_support), 0, 1)
+        tint = np.stack([np.zeros_like(t), 220 * (1 - t), 255 * (1 - t) + 230 * t], axis=-1)
+        alpha = np.where(sup >= min_support, 0.35 + 0.5 * t, 0.0)[..., None]
+        out = (out.astype(np.float32) * (1 - alpha) + tint * alpha).round().astype(np.uint8)
     # final mask: white fill + dark outline
     if msk.any():
         out[msk] = (255, 255, 255)
         cs, _ = cv2.findContours(msk.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(out, cs, -1, (40, 40, 40), max(1, int(round(scale / 2))), cv2.LINE_AA)
-    # peaks
+        cv2.drawContours(out, cs, -1, (0, 0, 0), max(1, int(round(scale / 2))), cv2.LINE_AA)
+    # peaks (always reported in info; drawn only on request)
     peaks_px = []
     for p in maps.get("peaks", []):
         x, y = M @ np.array([p["x"], p["y"], 1.0])
         n = int(p.get("n_support", 0))
-        r = int(round(3 * scale + 1.5 * scale * min(n, 10) ** 0.5))
-        cv2.circle(out, (int(round(x)), int(round(y))), r, (255, 200, 0), max(1, int(round(scale / 2))), cv2.LINE_AA)
-        cv2.putText(out, f"{p.get('id', '')} n={n}", (int(round(x)) + r + 2, int(round(y)) + 4),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.08 * scale, (160, 90, 0), 1, cv2.LINE_AA)
         peaks_px.append({**p, "diagram_x": float(x), "diagram_y": float(y)})
+        if show_peaks:
+            r = int(round(3 * scale + 1.5 * scale * min(n, 10) ** 0.5))
+            cv2.circle(out, (int(round(x)), int(round(y))), r, (255, 200, 0), max(1, int(round(scale / 2))), cv2.LINE_AA)
+            cv2.putText(out, f"{p.get('id', '')} n={n}", (int(round(x)) + r + 2, int(round(y)) + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.08 * scale, (160, 90, 0), 1, cv2.LINE_AA)
     if show_landmarks:
         for name in LANDMARK_ORDER:
             x, y = dst[name]

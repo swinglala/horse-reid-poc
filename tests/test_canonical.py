@@ -546,3 +546,8 @@ def test_draw_on_diagram_aligns_landmarks(tmp_path) -> None:
     # between the eyes (x ~ 53*4) and above the eye line (y < 110*4), below the ear bases (y > 62*4)
     assert abs(px - 53 * 4) < 12 and 62 * 4 < py < 110 * 4
     assert tuple(out[int(py), int(px)]) == (255, 255, 255)              # mask drawn white at the peak
+    # default rendering = white fill + black outline only: no blue peak circle, no orange landmark dot
+    assert not ((out[:, :, 0] > 200) & (out[:, :, 1] < 230) & (out[:, :, 2] < 60)).any()
+    assert not ((out[:, :, 2] > 200) & (out[:, :, 1] > 120) & (out[:, :, 1] < 200) & (out[:, :, 0] < 60)).any()
+    out2, _ = draw_on_diagram(bgr, lmf, maps, scale=4.0, show_peaks=True, show_landmarks=True)
+    assert (out2 != out).any()
