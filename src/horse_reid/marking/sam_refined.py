@@ -10,7 +10,8 @@ from typing import Any, Optional
 import cv2
 import numpy as np
 
-from .adaptive_color import AdaptiveColorSegmenter, contour_shape, coat_zmap, face_axis, region_axis_angle, region_info
+from .adaptive_color import (AdaptiveColorSegmenter, contour_shape, coat_zmap, face_axis, rect_sides,
+                             region_axis_angle, region_info)
 from .base import HorseMarkingSegmenter, MarkingResult, full_face_mask
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,9 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
                  min_mean_z: float = 1.5, min_iou: float = 0.3, iou_dilate_px: int = 5,
                  neg_z_max: float = 0.5, neg_min_dist_frac: float = 0.15, strap_elongation: float = 6.25,
                  strap_min_len_frac: float = 0.25, strap_max_thick_frac: float = 0.15,
-                 stripe_axis_max_deg: float = 30.0, strong_z: float = 6.5, strong_area_frac: float = 0.01) -> None:
+                 stripe_axis_max_deg: float = 30.0, strong_z: float = 6.5, strong_area_frac: float = 0.01,
+                 strap_min_cover: float = 0.5, compact_max_ratio: float = 2.5,
+                 swallow_area_ratio: float = 10.0) -> None:
         self.base = base if base is not None else AdaptiveColorSegmenter()
         self.sam_weights = Path(sam_weights)
         self.device = device
@@ -72,6 +75,9 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
         self.stripe_axis_max_deg = stripe_axis_max_deg
         self.strong_z = strong_z
         self.strong_area_frac = strong_area_frac
+        self.strap_min_cover = strap_min_cover   # SAM mask must cover this fraction of the candidate to call it a strap
+        self.compact_max_ratio = compact_max_ratio     # candidate min-area-rect long/short below this = compact blob
+        self.swallow_area_ratio = swallow_area_ratio   # SAM mask > this x candidate area on a compact blob = merged with neighbour
         self._sam: Any = None
 
     # ------------------------------------------------------------------ #
@@ -220,11 +226,23 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
             sam_info["sam_axis_deg"] = round(axis_deg, 1)
             sam_info["axis_deg"] = round(region_axis_deg, 1)
             sam_info["strong"] = strong
+            # The SAM mask describes the candidate only if it actually covers it. Prompted on a
+            # small star next to a white halter, SAM returns the halter (covers ~0 % of the
+            # star); that mask must not re-label the star as a strap.
+            cover = float((sm & region).sum()) / max(float(region.sum()), 1.0)
+            sam_info["sam_cover"] = round(cover, 3)
+            # A compact blob (a star) whose SAM mask is many times larger than itself: SAM
+            # merged it with the adjacent halter. The mask shape says nothing about the blob.
+            r_long, r_short = rect_sides(region)
+            compact = r_short > 0 and r_long / r_short < self.compact_max_ratio
+            swallowed = compact and float(sm.sum()) > self.swallow_area_ratio * float(region.sum())
+            sam_info["sam_swallowed"] = swallowed
             # A strong candidate that itself runs along the face axis is a blaze; the SAM
             # mask may have wandered onto a strap (low IoU) and must not re-label it.
             blaze_like = strong and min(axis_deg, region_axis_deg) <= self.stripe_axis_max_deg
             strap_like = (elong > self.strap_elongation and length > self.strap_min_len_frac * face_w
-                          and thick < self.strap_max_thick_frac * face_w and not blaze_like)
+                          and thick < self.strap_max_thick_frac * face_w and cover >= self.strap_min_cover
+                          and not blaze_like and not swallowed)
             if strap_like:
                 excluded.append(region_info(region, face_area, z, reason="strap_shape", strap_source="sam",
                                             **sam_info))

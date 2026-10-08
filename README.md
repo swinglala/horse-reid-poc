@@ -155,14 +155,14 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 | 항목 | 값 |
 |---|---|
 | segmenter | `sam_refined` (30 frames) |
-| marking이 accept된 프레임 | 9 / 30 (frontal 1/7, three_quarter 4/9, profile 4/14) |
-| 평균 marking 면적 | 얼굴의 0.14% (전체), 0.46% (accept된 프레임) |
-| 제외된 영역 | too_small 340, low_solidity 38, strap_shape 34, edge_fragment 33, outside_landmark_hull 26, sam_flood 12, above_ears 7, eye_glint 2 |
+| marking이 accept된 프레임 | 11 / 30 (frontal 2/7, three_quarter 5/9, profile 4/14) |
+| 평균 marking 면적 | 얼굴의 0.29% (전체), 0.79% (accept된 프레임) |
+| 제외된 영역 | too_small 340, low_solidity 38, edge_fragment 33, outside_landmark_hull 26, strap_shape 24, sam_flood 22, above_ears 7, eye_glint 2 |
 | face mask | seg 18 / seg+landmark_hull 12 (hull이 추가한 면적은 최대 3%) |
 | coat class | dark 24 / medium 6 (`white_marking_applicable: true`) |
-| wall time | 33.7 s (CPU) |
+| wall time | 33.47s (CPU) |
 
-**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 990에서 accept된다. 세 번째 영상 작업(아래) 이후 face mask가 머리 crop 전체를 덮도록 바뀌면서 z 정규화 기준이 미세하게 달라졌고, 그 결과 frame 975의 star(84 px, z 3.4)는 후보 문턱 아래로 떨어졌다. frame 828의 이마 햇빛 광택(얼굴의 6%, z 4.5)은 main의 재실행에서는 accept됐다가(SAM이 범람해 base 후보가 그대로 통과) landmark hull 보강(세 번째 영상 5번 항목) 후 다시 제외되는 등 SAM 결과가 face mask의 작은 차이에 흔들린다. 둘 다 경계선 사례이며 이 segmenter의 취약점이다. 나머지 accept 성분(예: frame 363/576)은 ear-base / poll highlight로 false positive이다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
+**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 990에서 accept된다. 세 번째 영상 작업(아래) 이후 face mask가 머리 crop 전체를 덮도록 바뀌면서 z 정규화 기준이 미세하게 달라졌고, 그 결과 frame 975의 star(84 px, z 3.4)는 후보 문턱 아래로 떨어졌다. frame 828의 이마 햇빛 광택(얼굴의 6%, z 4.5)은 main의 재실행에서는 accept됐다가(SAM이 범람해 base 후보가 그대로 통과) landmark hull 보강(세 번째 영상 5번 항목) 후 다시 제외되는 등 SAM 결과가 face mask의 작은 차이에 흔들린다. 둘 다 경계선 사례이며 이 segmenter의 취약점이다. 나머지 accept 성분(frame 0/147/363/516/576/624/648 등, 대부분 60–250 px, z 3–5)은 ear-base / poll / 갈기 밑 highlight로 false positive이다. 이 중 상당수는 예전에 `strap_shape`로 제외됐지만, 그것은 SAM이 작은 blob을 halter와 한 덩어리로 분할한 결과를 끈 모양으로 읽은 우연이었다. 네 번째 영상에서 같은 현상이 진짜 star를 지우는 것을 보고 그 판정을 막았으므로(`sam_cover`, `sam_swallowed`) 이 false positive들은 다시 후보로 남는다. 작은 밝은 blob이 star인지 하이라이트인지는 현재 heuristic으로 구분할 수 없고, 여러 프레임에서 같은 canonical 위치에 반복되는지(Phase 3 n_support)로만 걸러진다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
 
 ### Phase 3: canonical marking reference
 
@@ -180,17 +180,17 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |              ░░                |
 |                ░               |
 |         *                      |
-|     *                  *       |
-|               *                |
+|     *                          |
+|                                |
 |                                |
 |                 ░              |
 |                  ░             |
 |                                |
 |                                |
+|   *                            |
 |                                |
 |                                |
-|                                |
-|                                |
+|         *                      |
 |                                |
 |                                |
 |                                |
@@ -198,31 +198,32 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |                                |
 |            ░                   |
 |            ░                   |
-|                                |
+|                  *             |
 |           ░                    |
 |                                |
 |                                |
 |                                |
+|            *                   |
 |                                |
 |                                |
 |                                |
-|             *                  |
 |                                |
 |                                |
 |                                |
 |                                |
 +--------------------------------+
 value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ >=.8;  * = peak below ░
-peaks (canonical x,y): p0(150,35) n=1 s=0.05; p1(46,75) n=1 s=0.04; p2(75,67) n=2 s=0.04; p3(114,51) n=1 s=0.03; p4(126,84) n=1 s=0.02; p5(108,287) n=1 s=0.02; p6(195,74) n=1 s=0.02
+peaks (canonical x,y): p0(149,222) n=3 s=0.05; p1(150,35) n=1 s=0.05; p2(46,75) n=1 s=0.04; p3(75,67) n=2 s=0.04; p4(24,134) n=1 s=0.03; p5(114,51) n=1 s=0.03; p6(72,156) n=1 s=0.03; p7(97,256) n=1 s=0.03
 ```
 
 ![Final report](docs/results/final_report.jpg)
 
 - 29 / 30 프레임 mapping (skipped: [648]). view: frontal 7 / 3-4 8 / profile 14.
 - canonical mask px = 0: star는 1프레임(990)에서만 accept되어 prob 0.5를 넘지 못한다.
-- candidate peak 7개, 그중 multi-frame support 1개:
-  - p2 (75,67) n=2, frames [576, 624]: 귀 밑 highlight로 추정 (star 위치가 아님).
-  - 단일 프레임 peak 6개 (ear-base highlight 등)는 false positive로 추정. 이마 star는 frame 990의 단일 peak로만 남는다.
+- candidate peak 8개, 그중 multi-frame support 2개:
+  - p0 (149,222) n=3, frames [750, 828, 843]: star 위치가 아님, 하이라이트로 추정.
+  - p3 (75,67) n=2, frames [576, 624]: star 위치가 아님, 하이라이트로 추정.
+  - 단일 프레임 peak 6개. 이마 star는 frame 990의 단일 peak로만 남는다.
 - `face_embedding`: CLIP ViT-B/32, 29개 crop의 mean (보조 용도). 주 identity 증거는 canonical marking mask이다.
 
 `reference/horse_reference.json` 구조 (일부 생략):
@@ -240,9 +241,9 @@ peaks (canonical x,y): p0(150,35) n=1 s=0.05; p1(46,75) n=1 s=0.04; p2(75,67) n=
     "mapper": "planar",
     "canonical_size": [256, 320],
     "files": {"prob": "...", "coverage": "...", "mask": "...", "marking": "...", "ascii": "..."},
-    "canonical_peaks": [{"id": "p0", "x": 150, "y": 35, "n_support": 1, "frames": [843], "...": "..."}],
+    "canonical_peaks": [{"id": "p0", "x": 149, "y": 222, "n_support": 3, "frames": [750, 828, 843], "...": "..."}],
     "params": {"peak_sigma": 4.0, "prob_threshold": 0.5, "...": "..."},
-    "stats": {"mask_px": 0, "n_peaks": 7, "n_peaks_multi": 1, "skipped_frames": [648]},
+    "stats": {"mask_px": 0, "n_peaks": 8, "n_peaks_multi": 2, "skipped_frames": [648]},
     "notes": ["..."]
   }
 }
@@ -356,6 +357,86 @@ peaks (canonical x,y): p0(135,271) n=6 s=0.61; p1(138,167) n=5 s=0.46; p2(144,20
 5. **얼굴 영역을 landmark로 보강했다 (branch `landmark-face-region`).** 1–4 적용 후에도 YOLO11-seg 얼굴 마스크가 noseband에서 끝나 끈 아래 muzzle 쪽 blaze는 후보에도 오르지 못했다 (5.1%). 이제 Phase 2의 얼굴 영역은 seg 마스크 ∪ (눈·코 landmark의 convex hull, crop 폭의 6% 팽창)이다. 귀까지 넣은 hull은 옆 사람의 손과 밝은 바닥을 끌어들여 오히려 나빠졌고(5 / 10), 눈·코 삼각형만 쓰면 얼굴 중앙에 머문다. 단, hull로 추가된 영역(흰 muzzle)이 coat 기준 통계와 조명 보정 필드에 들어가면 blaze의 z가 8.3에서 6.5로 떨어져 정면 프레임이 빠졌으므로, coat 기준은 seg 부분(`coat_mask`)에서만 계산하고 탐색 범위만 넓힌다. 또 strong 후보 자신이 얼굴 축 방향이면 SAM mask가 끈 위로 흘러가도(IoU 0.22) strap으로 재판정하지 않는다. 결과 5.1% → 10.8%, muzzle 쪽 peak p0가 6프레임 지지.
 
 **남은 한계:** (a) 눈·코 hull은 정면/3-4 view에서만 muzzle을 되살린다. (b) profile 프레임 56은 landmark hull 밖이라 제외됐다. (c) canonical map에서 blaze가 한 줄이 아니라 여러 갈래로 퍼진 것은 planar mapper가 3/4 view를 평면 template에 근사하는 정렬 오차다. (d) 1.1 s 클립이라 10프레임이 사실상 같은 pose의 연속 프레임이다.
+
+### 네 번째 영상 말2.mov (bay, 이마의 작은 star, 흰 halter, 0.7 s 정면 클립)
+
+이마에 작은 star 하나가 있는 bay 말. 2704x1520 가로, HEVC, 61 fps, 46 frames (0.74 s). 흰색 halter를 썼고 거의 정면만 찍혔다 (후보 frontal 32 / 3-4 14). 세 번째 영상과 같은 설정으로 실행했다 (`data/input/mal2.mov`, head stride 1, 10 frames). 원본 결과물: `docs/results/video4_*`.
+
+![video4 contact sheet](docs/results/video4_contact_sheet.jpg)
+
+![video4 marking sheet](docs/results/video4_marking_sheet.jpg)
+
+Frame 22 overlay (crop | face mask | candidate prob | final):
+
+![video4 overlay frame 22](docs/results/video4_overlay_frame_00022.jpg)
+
+![video4 canonical marking](docs/results/video4_canonical_marking.png)
+
+| 항목 | 값 |
+|---|---|
+| Phase 1 선택 | 10 / 10 (46 / 46 후보 통과, adaptive blur 기준 36.8), 0.16–0.74 s, visibility 1.0 |
+| yaw bin (선택) | frontal 8 / three_quarter 2 |
+| 머리 크기 (median) | 139x286 px |
+| wall time (Phase 1) | 151 s (head stage 135 s, 46 frames) |
+| Phase 2 | marking 10 / 10 프레임, 평균 얼굴의 0.34% (star 약 250–350 px @2x), 21 s. face mask: seg+landmark_hull 9 / seg 1 |
+| 제외된 영역 | too_small 230, sam_flood 12, low_solidity 10, high_chroma 9, edge_fragment 7, outside_landmark_hull 6, strap_shape 3 |
+| coat class | dark 10 / 10 (`white_marking_applicable: true`) |
+| Phase 3 | canonical mask px 364 (prob > 0.5인 첫 사례), peak 2개: p0 (134,82) n=10 / 10 frames, support 1.0 (이마 star); p1 (105,284) n=3 frames [10, 14, 45] (muzzle 쪽 작은 밝은 점, 확인 필요) |
+
+```
+          HORSE MARKING           
++--------------------------------+
+|                                |
+|                                |
+|                                |
+|                                |
+|                                |
+|                     ░          |
+|                                |
+|                ░               |
+|                      ░░        |
+|               ▒▓▓    ░░        |
+|               ▓█▓              |
+|              ░░░▒              |
+|                                |
+|                    ░           |
+|                                |
+|                                |
+|                                |
+|                                |
+|                                |
+|                                |
+|             ▓▓▒▒▒              |
+|         ▒░▒▓▓▒░░▒              |
+|         ▓▒▓▓░  ░               |
+|         ▓▓▓░                   |
+|         ▓▒░                    |
+|         ░░                     |
+|         ▒░                     |
+|                                |
+|                      ░         |
+|           ▓                    |
+|           ▓                    |
+|           ░░              ░    |
+|           ░▒    ░              |
+|           ░░   ▒▒    ░         |
+|             ░  ▒░  ▒▒    ░     |
+|            ▒▒      ░▒          |
+|            ░▒      ░░          |
+|             ░     ░ ░          |
+|            ░░    ░░            |
+|                  ░░   ░        |
++--------------------------------+
+value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ >=.8;  * = peak below ░
+peaks (canonical x,y): p0(134,82) n=10 s=0.57; p1(105,284) n=3 s=0.08
+```
+
+**이 영상이 드러낸 문제와 수정:** 첫 실행은 star를 3 / 10 프레임에서만 accept했다. 나머지 7프레임에서는 star를 prompt로 받은 MobileSAM이 star 대신 바로 옆의 흰 halter를 분할했고(SAM mask가 star를 0–5 % 덮음, elongation 10+), 그 끈 모양 때문에 star가 `strap_shape`로 제외됐다. 두 가지를 `sam_refined`에 추가했다.
+
+1. **SAM mask가 후보를 덮어야 strap 판정을 한다** (`sam_cover` ≥ 0.5). 후보와 겹치지 않는 mask는 후보에 대해 아무것도 말해 주지 않으므로 `sam_flood`로 기록하고 base 후보를 유지한다. 이것으로 7 / 10.
+2. **콤팩트한 blob을 삼킨 mask는 무시한다** (`sam_swallowed`: 후보의 min-area-rect 비율 < 2.5이고 SAM mask 면적이 후보의 10배 이상). 남은 3프레임은 SAM이 star와 halter를 한 덩어리로 분할해 cover가 1.0이었다. 진짜 끈 조각(영상 1 frame 975)은 후보 자체가 길쭉하고(비율 3.3) SAM 면적비가 3.7이라 구분된다. 이것으로 10 / 10.
+
+**남은 한계:** frame 18에서는 SAM 정제가 star 주변 1763 px(z 1.7)로 번져 star보다 큰 영역이 accept됐다. muzzle 쪽 p1은 코 주변의 분홍 피부 또는 작은 snip일 수 있어 육안 확인이 필요하다. 영상 1에서 SAM strap 규칙이 걸러내던 항목 상당수는 끈이 아니라 코등 광택과 귀 밑 하이라이트였으므로(SAM이 우연히 끈 모양 mask를 냈을 뿐), 이 두 수정으로 영상 1의 그런 항목 일부가 다시 후보로 남는다 (아래 Phase 2 표 참고).
 
 ## 6. 한계와 다음 단계
 
