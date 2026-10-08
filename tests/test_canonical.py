@@ -507,3 +507,42 @@ def test_build_reference_4dequine_unavailable(tmp_path):
     _write_fixture(tmp_path)
     with pytest.raises(FourDEquineNotAvailable):
         build_reference(tmp_path, None, mapper_name="4dequine", compute_embedding=False)
+
+
+def test_draw_on_diagram_aligns_landmarks(tmp_path) -> None:
+    """The affine fitted on the five landmarks maps the template landmarks onto the
+    diagram landmarks and warps a star at the template forehead to the diagram forehead."""
+    import json
+
+    import cv2
+    import numpy as np
+
+    from horse_reid.canonical.diagram import draw_on_diagram, estimate_affine, load_diagram, load_reference_maps
+    from horse_reid.canonical.planar import CANONICAL_H, CANONICAL_LANDMARKS, CANONICAL_W
+
+    img = np.full((245, 107, 4), (255, 255, 255, 0), np.uint8)       # transparent like the real sheet
+    cv2.imwrite(str(tmp_path / "front.png"), img)
+    lm = {"left_ear_base": [35, 62], "right_ear_base": [72, 62], "left_eye": [24, 110],
+          "right_eye": [82, 110], "nose": [53, 213]}
+    (tmp_path / "front.json").write_text(json.dumps({"image": "front.png", "landmarks": lm}))
+    bgr, lmf = load_diagram(tmp_path / "front.json")
+    assert bgr.shape == (245, 107, 3) and bgr.min() == 255             # flattened onto white
+    M, rms = estimate_affine(CANONICAL_LANDMARKS, lmf)
+    assert rms < 8.0, rms                                                # drawing is not to scale (eyes sit wider)
+    # reference maps: a star between the eyes, slightly above (template (128, 95))
+    ref = tmp_path / "reference"; ref.mkdir()
+    sup = np.zeros((CANONICAL_H, CANONICAL_W), np.uint8); cv2.circle(sup, (128, 95), 8, 255, -1)
+    cv2.imwrite(str(ref / "canonical_support.png"), sup)
+    cv2.imwrite(str(ref / "canonical_mask.png"), sup)
+    cv2.imwrite(str(ref / "canonical_nsupport.png"), (sup > 0).astype(np.uint8) * 5)
+    cv2.imwrite(str(ref / "canonical_prob.png"), sup)
+    (ref / "horse_reference.json").write_text(json.dumps({"horse_id": "t", "reference": {
+        "canonical_peaks": [{"id": "p0", "x": 128, "y": 95, "n_support": 5, "frames": [1, 2, 3, 4, 5]}],
+        "frames": [1, 2, 3, 4, 5], "views": {"frontal": 5}}}))
+    maps = load_reference_maps(ref)
+    out, info = draw_on_diagram(bgr, lmf, maps, scale=4.0)
+    assert out.shape == (980, 428, 3) and info["mask_px"] > 0
+    px, py = info["peaks"][0]["diagram_x"], info["peaks"][0]["diagram_y"]
+    # between the eyes (x ~ 53*4) and above the eye line (y < 110*4), below the ear bases (y > 62*4)
+    assert abs(px - 53 * 4) < 12 and 62 * 4 < py < 110 * 4
+    assert tuple(out[int(py), int(px)]) == (255, 255, 255)              # mask drawn white at the peak

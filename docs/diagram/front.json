@@ -1,0 +1,11 @@
+{
+  "image": "front.png",
+  "description": "Frontal head view cut from a Korean horse identification diagram sheet (말 도해서). Landmarks in original image pixels; names are image sides (image-left = horse's anatomical right), matching horse_reid.canonical.planar.CANONICAL_LANDMARKS.",
+  "landmarks": {
+    "left_ear_base": [35, 62],
+    "right_ear_base": [72, 62],
+    "left_eye": [24, 110],
+    "right_eye": [82, 110],
+    "nose": [53, 213]
+  }
+}

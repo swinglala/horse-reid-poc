@@ -65,6 +65,9 @@ python scripts/build_reference.py --output data/output --input data/input/100001
 # Phase 1+2+3 한 번에
 python scripts/run_pipeline.py --input data/input/1000018050.mp4 --output data/output --phase all
 
+# Phase 3 결과를 말 도해서(정면 그림) 위에 그리기 (Phase 3 output 필요)
+python scripts/draw_on_diagram.py --output data/output --diagram docs/diagram/front.json
+
 # 검출을 다시 돌리지 않고 저장된 detections/scores로 track 병합 + 점수 + 선택만 재실행 (수 초)
 python scripts/run_pipeline.py --reselect --output data/output --num-frames 30 --min-score 0.35
 
@@ -107,7 +110,8 @@ data/output/
   summary.txt            Phase 1 요약                 annotated.mp4         (--visualize)
   marking/               Phase 2: face mask, 후보 확률, 최종 mask, overlay, marking_sheet.jpg, summary.txt
   reference/             Phase 3: canonical_{prob,coverage,mask,consistency,support,nsupport,marking}.png,
-                         canonical_marking.txt, horse_reference.json
+                         canonical_marking.txt, horse_reference.json,
+                         marking_on_diagram.png/.json (scripts/draw_on_diagram.py)
   final_report.jpg       Phase 3 종합 report
 ```
 
@@ -509,6 +513,19 @@ peaks (canonical x,y): p0(134,96) n=5 s=0.87; p1(151,141) n=1 s=0.12
 
 **평가:** 세 번째·네 번째 영상에서 넣은 규칙이 그대로 동작했다. 햇빛 받은 chestnut coat는 chroma 25–33으로 `high_chroma`에, 코등 광택은 convex-hull solidity 0.40으로 `low_solidity`에 걸려 star만 남았다. 다만 5프레임이 사실상 같은 장면이므로 support 0.87은 pose 다양성에 대한 증거가 아니다. canonical prob 지도에는 star 외에도 `high_chroma`로 제외되기 전 단계의 밝은 가장자리(햇빛 경계)가 희미하게 남아 있다 (prob은 base 후보 확률, mask는 accept된 성분만 반영).
 
+### 도해서(등록 도면) 위에 그리기
+
+canonical reference는 256x320 template 좌표계에 있다. 같은 다섯 기준점(귀 밑 2, 눈 2, 코 1)을 정면 도면 위에서 지정하면 template → 도면 affine 변환으로 Phase 3 결과를 도면 위에 옮겨 그릴 수 있다 (`scripts/draw_on_diagram.py`, `src/horse_reid/canonical/diagram.py`). 도면과 기준점은 `docs/diagram/front.json`에 있다 (한국 말 등록 도해서의 정면 그림, 107x245 px, 기준점은 격자 확대본에서 수동으로 읽음: 귀 밑 (35,62)/(72,62), 눈 (24,110)/(82,110), 코 (53,213)). 새 도면을 쓰려면 같은 형식의 JSON만 만들면 된다.
+
+| 영상 1 (star) | 영상 3 (blaze) | 영상 4 (star) | 영상 5 (star) |
+|---|---|---|---|
+| ![v1](docs/results/phase3_marking_on_diagram.png) | ![v3](docs/results/video3_marking_on_diagram.png) | ![v4](docs/results/video4_marking_on_diagram.png) | ![v5](docs/results/video5_marking_on_diagram.png) |
+
+- 노란~빨간 색: `support` (accept된 mask가 그 픽셀을 덮은 프레임의 가중 비율, 0.15 이상만 표시). 흰 채움 + 검은 윤곽: support ≥ 0.5 (프레임 과반). 파란 원: candidate peak와 지지 프레임 수. 주황 점: 도면의 기준점, 주황 십자: template 기준점이 affine으로 옮겨진 위치.
+- 채움에 prob 기반 canonical mask를 쓰지 않는 이유: prob은 base 후보 확률이라 제외된 물체(영상 4의 흰 halter 코끈)도 밝게 남는다. support는 accept된 성분만 반영한다.
+- 다섯 기준점의 affine 잔차는 도면 px로 RMS 6.6 (눈이 template보다 바깥쪽에 그려져 있어 affine으로는 다 못 맞춤). 도면은 실측이 아니므로 위치는 대략적이며, 무늬의 모양은 planar mapper의 정렬 오차를 그대로 가진다 (영상 3의 blaze가 여러 갈래로 보이는 것).
+- 영상 1은 star가 1프레임에서만 accept돼 support 0.5를 넘는 픽셀이 없고, 작은 하이라이트 peak들만 원으로 표시된다. 영상 4·5는 이마 star가, 영상 3은 코등을 따라 내려가는 blaze가 도면에 그려진다.
+
 ## 6. 한계와 다음 단계
 
 - **head-stride 비용:** CPU에서 Grounding DINO가 약 3.2 s/frame이라 stride 3에도 head stage가 1065 s. GPU 또는 더 가벼운 detector가 필요하다.
@@ -538,11 +555,13 @@ src/horse_reid/
   visualization/                  annotate.py, contact_sheet.py
   marking/                        base.py, registry.py, face_region.py, adaptive_color.py,
                                   sam_refined.py, yolo_seg.py (stub), visualize.py, aihub/convert.py
-  canonical/                      base.py, planar.py, fourdequine.py, embedding.py, reference.py, io.py
+  canonical/                      base.py, planar.py, fourdequine.py, embedding.py, reference.py, io.py,
+                                  diagram.py (reference -> 도해서 overlay)
 scripts/                          run_pipeline.py, select_frames.py, run_marking.py,
-                                  build_reference.py, convert_aihub.py
-tests/                            86 tests (test_smoke, test_grounded_head, test_marking, test_canonical)
-docs/                             model_selection.md, aihub_dataset.md, 4dequine_integration.md, results/
+                                  build_reference.py, draw_on_diagram.py, convert_aihub.py
+tests/                            87 tests (test_smoke, test_grounded_head, test_marking, test_canonical)
+docs/                             model_selection.md, aihub_dataset.md, 4dequine_integration.md, results/,
+                                  diagram/ (front.png + front.json 기준점)
 ```
 
 ## 8. 라이선스 / 출처
