@@ -438,6 +438,77 @@ peaks (canonical x,y): p0(134,82) n=10 s=0.57; p1(105,284) n=3 s=0.08
 
 **남은 한계:** frame 18에서는 SAM 정제가 star 주변 1763 px(z 1.7)로 번져 star보다 큰 영역이 accept됐다. muzzle 쪽 p1은 코 주변의 분홍 피부 또는 작은 snip일 수 있어 육안 확인이 필요하다. 영상 1에서 SAM strap 규칙이 걸러내던 항목 상당수는 끈이 아니라 코등 광택과 귀 밑 하이라이트였으므로(SAM이 우연히 끈 모양 mask를 냈을 뿐), 이 두 수정으로 영상 1의 그런 항목 일부가 다시 후보로 남는다 (아래 Phase 2 표 참고).
 
+### 다섯 번째 영상 먈3.mov (chestnut, 이마의 작은 star, 5 frames 정면 클립)
+
+이마에 작은 star가 있는 chestnut(밤색) 말. 2704x1520 가로, HEVC, 5 frames (0.06 s)뿐이라 5프레임 전부 선택했다 (`--num-frames 5 --min-gap 1`, `data/input/mal3.mov`). 오른쪽 얼굴에 강한 햇빛이 비친다. 코드 변경 없이 네 번째 영상과 같은 브랜치 상태로 실행했다. 원본 결과물: `docs/results/video5_*`.
+
+![video5 marking sheet](docs/results/video5_marking_sheet.jpg)
+
+Frame 2 overlay (crop | face mask | candidate prob | final):
+
+![video5 overlay frame 2](docs/results/video5_overlay_frame_00002.jpg)
+
+![video5 canonical marking](docs/results/video5_canonical_marking.png)
+
+| 항목 | 값 |
+|---|---|
+| Phase 1 선택 | 5 / 5 (전부 frontal, visibility 1.0, adaptive blur 기준 71.7), 머리 크기 median 197x429 px |
+| wall time (Phase 1) | 29.39s (0.17 frames/s) |
+| Phase 2 | marking 5 / 5 프레임, 평균 얼굴의 0.63% (star 약 1450–1560 px @2x, SAM 정제 accept), 7.16s. face mask: seg+landmark_hull 5 |
+| 제외된 영역 | too_small 213, high_chroma 29 (햇빛 받은 주황색 coat), strap_shape 10, low_solidity 6 (코등을 따라 난 광택 11k px, z 4.5, solidity 0.40), edge_fragment 6, outside_landmark_hull 5, sam_flood 1 |
+| coat class | dark 5 / 5 (그늘진 쪽 L median 17; chestnut이지만 흰 무늬 분리에는 문제 없음) |
+| Phase 3 | canonical mask px 2210, peak 2개: p0 (134,96) n=5 / 5 frames, support 1.00 (이마 star); p1 (151,141) n=1 (단일 프레임) |
+
+```
+          HORSE MARKING           
++--------------------------------+
+|        ░   ▒                   |
+|        ░   ▓                   |
+|        ░   ▓▓           ░      |
+|            ▒██▓    ▒   ░░      |
+|       ░░   █▒▓▒▒ ▒█▒    ░      |
+|      ░░▒  ██▓▓▓░░░░            |
+|    ░░░░▒  ░ █  ▒░              |
+|   ░░   ▒             ▓▓        |
+|        ▓            ▒▒░        |
+|        ▓            ░░░        |
+|                ██ ░▓░          |
+|                ██ ▓▓░          |
+|       ▓ ▒     ███▓ ░▓░         |
+|       ▓        ▓▓   ░          |
+|       ▓ ▒       ▓▒░  ▒▒░       |
+|      ▒▓░▓      ░▒ ░░ ▒▓▒░      |
+|      ▓▓░      ░░▓░▒▒ ▓█        |
+|      ██         ▒▓▒░ ▒         |
+|      █▒        ░ ▓▒  ▓         |
+|      █▒        █▒▓   ▒         |
+|      █         █▒▓   ░         |
+|      █         █▓▓   ░         |
+|      █░        ██▓  ░          |
+|      ▓░        ██▓▒            |
+|      ▓▓        ██▓▒            |
+|      ░▓▒▓      ██▓▒            |
+|       ▓ ▓      ▓█▓▒            |
+|       ▓▒      ▓██▓▒▒           |
+|      ▒▓ ▓        ▓█▓           |
+|      ░░▒         ▒██           |
+|        ▓        ▒███           |
+|    ░   ░        ▒▓▓░           |
+|   ░     ▒       ░▓▓▒           |
+|   ░     ▒░       █▓            |
+|         ░▓      ░██▓           |
+|          ░       ███           |
+|                  ░██           |
+|                   █▒           |
+|                  ▒▒            |
+|            ░     █▒            |
++--------------------------------+
+value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ >=.8;  * = peak below ░
+peaks (canonical x,y): p0(134,96) n=5 s=0.87; p1(151,141) n=1 s=0.12
+```
+
+**평가:** 세 번째·네 번째 영상에서 넣은 규칙이 그대로 동작했다. 햇빛 받은 chestnut coat는 chroma 25–33으로 `high_chroma`에, 코등 광택은 convex-hull solidity 0.40으로 `low_solidity`에 걸려 star만 남았다. 다만 5프레임이 사실상 같은 장면이므로 support 0.87은 pose 다양성에 대한 증거가 아니다. canonical prob 지도에는 star 외에도 `high_chroma`로 제외되기 전 단계의 밝은 가장자리(햇빛 경계)가 희미하게 남아 있다 (prob은 base 후보 확률, mask는 accept된 성분만 반영).
+
 ## 6. 한계와 다음 단계
 
 - **head-stride 비용:** CPU에서 Grounding DINO가 약 3.2 s/frame이라 stride 3에도 head stage가 1065 s. GPU 또는 더 가벼운 detector가 필요하다.

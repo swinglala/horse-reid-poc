@@ -1,0 +1,24 @@
+horse_reid Phase 1 summary
+==========================
+input:                data/input/mal3.mov
+video:                2704x1520 (rotation 0), 68.40 fps, 5 frames
+device:               mps
+frames processed:     5
+frames with horse:    5
+head stride:          1 (5 frames ran the head stage)
+frames with head:     5 (primary track group)
+selected frames:      5 of 5 requested (min_score 0.35: 5 of 5 candidates pass)
+primary track id:     1 (length 5, group [1], all horse tracks [1])
+min gap (frames):     1
+selected time range:  0.00s - 0.06s (82% of 0.1s video)
+mean score (cands):   0.8647
+mean score (selected):0.8647
+yaw bins candidates:  {'frontal': 5}
+yaw bins selected:    {'frontal': 5}
+head methods:         {'grounding_dino': 5} (frames per method, primary track group)
+yaw sources:          {'landmarks': 5}
+mean visibility:      cands 1.0, selected 1.0
+blur_ref:             71.666 (adaptive)
+median_head_px:       197x429
+wall time:            29.39s (0.17 frames/s)
+stage timing (s):     {'model_load': 0.364, 'decode': 0.21, 'detect_track': 2.306, 'head': 22.213, 'quality': 0.015, 'visualize': 0.208, 'select': 0.003, 'write': 0.893, 'total_wall': 29.392}

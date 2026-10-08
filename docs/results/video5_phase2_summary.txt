@@ -1,0 +1,15 @@
+horse_reid Phase 2 (white-marking) summary
+==========================================
+segmenter:            sam_refined (methods {'sam_refined': 5})
+frames processed:     5 / 5 selected
+frames with marking:  5
+mean marking area:    0.63% of face (all frames)
+mean area (marked):   0.63% of face (frames with marking)
+yaw bins (marked/all): frontal: 5/5
+excluded regions:     {'too_small': 213, 'high_chroma': 29, 'low_solidity': 6, 'strap_shape': 10, 'outside_landmark_hull': 5, 'edge_fragment': 6, 'sam_flood': 1}
+face mask sources:    {'seg+landmark_hull': 5}
+coat classes:         {'dark': 5}
+applicability:        white-marking applicable
+device:               mps
+wall time:            7.16s
+stage timing (s):     {'model_load': 0.0, 'decode': 0.681, 'face_region': 1.453, 'segment': 4.704, 'write': 0.312, 'total_wall': 7.159}
