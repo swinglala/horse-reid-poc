@@ -48,7 +48,7 @@ class YoloSegMarkingSegmenter(HorseMarkingSegmenter):
         self.imgsz = imgsz
 
     def predict(self, image: np.ndarray, face_mask: Optional[np.ndarray] = None,
-                keypoints: Optional[dict] = None) -> MarkingResult:
+                keypoints: Optional[dict] = None, coat_mask: Optional[np.ndarray] = None) -> MarkingResult:
         """
         Returns:
             mask: binary or probability mask

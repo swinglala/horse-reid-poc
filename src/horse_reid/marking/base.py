@@ -69,8 +69,14 @@ class HorseMarkingSegmenter(ABC):
 
     @abstractmethod
     def predict(self, image: np.ndarray, face_mask: Optional[np.ndarray] = None,
-                keypoints: Optional[dict] = None) -> MarkingResult:
+                keypoints: Optional[dict] = None, coat_mask: Optional[np.ndarray] = None) -> MarkingResult:
         """
+        ``face_mask``: where markings are searched. ``coat_mask`` (optional,
+        subset of the face mask): where the coat reference brightness is
+        measured; defaults to the face mask. Phase 2 passes the seg-derived
+        mask as coat_mask when the face mask was extended with the landmark
+        hull, so a large white muzzle does not dilute the coat statistics.
+
         Returns:
             mask: binary or probability mask
         """

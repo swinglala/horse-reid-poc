@@ -146,12 +146,12 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
 
     # ------------------------------------------------------------------ #
     def predict(self, image: np.ndarray, face_mask: Optional[np.ndarray] = None,
-                keypoints: Optional[dict] = None) -> MarkingResult:
+                keypoints: Optional[dict] = None, coat_mask: Optional[np.ndarray] = None) -> MarkingResult:
         """
         Returns:
             mask: binary or probability mask
         """
-        base = self.base.predict(image, face_mask, keypoints)
+        base = self.base.predict(image, face_mask, keypoints, coat_mask=coat_mask)
         fm = full_face_mask(image, face_mask)
         n, labels = cv2.connectedComponents(base.mask.astype(np.uint8), connectivity=8)
         if n <= 1:
@@ -215,12 +215,16 @@ class SamRefinedSegmenter(HorseMarkingSegmenter):
                         "sam_length": round(length, 1), "sam_thickness": round(thick, 1),
                         "sam_points": pts, "sam_labels": lbl}
             axis_deg = region_axis_angle(sm, axis) if sm.any() else 90.0
+            region_axis_deg = region_axis_angle(region, axis)
             strong = bool(region.sum() >= self.strong_area_frac * face_area and float(z[region].mean()) >= self.strong_z)
             sam_info["sam_axis_deg"] = round(axis_deg, 1)
+            sam_info["axis_deg"] = round(region_axis_deg, 1)
             sam_info["strong"] = strong
+            # A strong candidate that itself runs along the face axis is a blaze; the SAM
+            # mask may have wandered onto a strap (low IoU) and must not re-label it.
+            blaze_like = strong and min(axis_deg, region_axis_deg) <= self.stripe_axis_max_deg
             strap_like = (elong > self.strap_elongation and length > self.strap_min_len_frac * face_w
-                          and thick < self.strap_max_thick_frac * face_w
-                          and not (strong and axis_deg <= self.stripe_axis_max_deg))
+                          and thick < self.strap_max_thick_frac * face_w and not blaze_like)
             if strap_like:
                 excluded.append(region_info(region, face_area, z, reason="strap_shape", strap_source="sam",
                                             **sam_info))

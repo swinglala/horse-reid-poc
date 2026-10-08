@@ -369,3 +369,51 @@ def test_face_mask_not_clipped_by_narrow_horse_box() -> None:
     assert hb[0] <= 50 and hb[2] >= 260 and hb[1] <= 50 and hb[3] >= 250
     # The whole crop is horse pixels (fake mask is all-ones) - nothing is cut off at x=220.
     assert region.face_mask.shape == (140, 80) and region.face_mask[:, 45:].mean() > 0.9
+
+
+def test_face_mask_extended_to_landmark_hull() -> None:
+    """A seg mask that stops at the noseband is extended down to the nose landmark."""
+    class TopHalfSeg:
+        def horse_mask(self, frame: np.ndarray, hb: tuple[int, int, int, int]) -> np.ndarray:
+            m = np.zeros((hb[3] - hb[1], hb[2] - hb[0]), bool)
+            m[: m.shape[0] // 2] = True            # upper half of the box only
+            return m
+
+    frame = np.zeros((300, 400, 3), np.uint8)
+    ext = FaceRegionExtractor(seg_model_path="unused.pt", upscale=1.0)
+    ext._seg = TopHalfSeg()
+    head = (100, 50, 200, 250)
+    kps = {"left_ear": [[120.0, 60.0, 0.9]], "right_ear": [[180.0, 60.0, 0.9]],
+           "left_eye": [[125.0, 110.0, 0.9]], "right_eye": [[175.0, 110.0, 0.9]],
+           "nose": [[150.0, 240.0, 0.9]]}
+    base = ext.extract(frame, head, head, margin=0.0)
+    assert base.face_mask_source == "seg" and not base.face_mask[190, 50]
+    region = ext.extract(frame, head, head, margin=0.0, keypoints=kps)
+    assert region.face_mask_source == "seg+landmark_hull"
+    assert 0.0 < region.hull_added_frac < 1.0
+    assert region.coat_mask is not None and region.coat_mask[50, 50] and not region.coat_mask[190, 50]
+    assert base.coat_mask is None
+    assert region.face_mask[190, 50]          # muzzle (nose landmark y=240 -> crop y=190) now inside
+    assert region.face_mask[:95].all()        # seg part kept (bottom 2 px eroded)
+    assert not region.face_mask[190, 2]       # hull does not spill to the crop corner
+    # no seg at all: the hull alone becomes the face mask
+    ext._seg_failed = True
+    region = ext.extract(frame, head, head, margin=0.0, keypoints=kps)
+    assert region.face_mask_source == "landmark_hull" and region.hull_added_frac == 1.0
+
+
+def test_coat_mask_keeps_reference_statistics() -> None:
+    """A large white area inside the hull extension must not lift the coat reference."""
+    img = _coat()
+    fm = _FM.copy()
+    img[150:185, 40:160] = (250, 250, 250)        # white muzzle-like block (~23% of the face mask)
+    coat = fm.copy(); coat[150:] = False          # seg part = everything above it
+    plain = AdaptiveColorSegmenter().predict(_coat(), fm, _KPS_UPRIGHT)
+    with_cm = AdaptiveColorSegmenter().predict(img, fm, _KPS_UPRIGHT, coat_mask=coat)
+    no_cm = AdaptiveColorSegmenter().predict(img, fm, _KPS_UPRIGHT)
+    assert with_cm.stats["coat_ref_frac"] < 0.9 and no_cm.stats["coat_ref_frac"] == 1.0
+    assert abs(with_cm.stats["coat_L_median"] - plain.stats["coat_L_median"]) < 1.0
+    big = lambda r: [c for c in r.components + r.excluded if c["area_px"] > 1000][0]
+    # Without coat_mask the white block lifts the local illumination field and its own z drops.
+    assert big(no_cm)["mean_z"] < big(with_cm)["mean_z"] - 1.0
+    assert big(with_cm)["mean_z"] >= 6.5 and big(with_cm)["strong"] is True

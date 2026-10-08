@@ -11,6 +11,7 @@ import cv2
 import numpy as np
 
 from ..types import BBox, clip_bbox, expand_bbox
+from .adaptive_color import landmark_hull_mask
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,9 @@ class FaceRegion:
     face_mask: np.ndarray
     crop_bbox: BBox
     upscale: float = 1.0
-    face_mask_source: str = "seg"   # "seg" | "ellipse_fallback"
+    face_mask_source: str = "seg"   # "seg" | "seg+landmark_hull" | "landmark_hull" | "ellipse_fallback"
+    hull_added_frac: float = 0.0    # fraction of the final face mask contributed by the landmark hull only
+    coat_mask: Optional[np.ndarray] = None  # seg-derived part of face_mask when the hull extended it (coat reference)
 
     def __iter__(self) -> Iterator[Any]:
         return iter((self.crop, self.face_mask, self.crop_bbox))
@@ -47,7 +50,10 @@ def ellipse_mask(h: int, w: int, box: tuple[int, int, int, int]) -> np.ndarray:
 class FaceRegionExtractor:
     """Crop the head (head bbox + margin) and build a face mask.
 
-    The face mask is the YOLO11-seg horse instance mask (computed with
+    The face mask is the YOLO11-seg horse instance mask, united with the
+    convex hull of the ear/eye/nose landmarks when ``keypoints`` are given
+    (the seg mask can stop at a halter noseband and drop the muzzle; the
+    landmarks say where the face really ends). The seg mask is computed with
     :meth:`MaskTopHeadDetector.horse_mask` - same code path as Phase 1's
     ``mask_top`` head heuristic) intersected with the crop and eroded by
     ``erode_frac`` x crop width to drop the coat/background boundary.
@@ -114,8 +120,16 @@ class FaceRegionExtractor:
         return m if m.any() else None
 
     def extract(self, frame: np.ndarray, horse_bbox: Optional[BBox], head_bbox: BBox,
-                margin: float = 0.15) -> FaceRegion:
-        """Return ``(face_crop_bgr, face_mask_bool, crop_bbox)`` (a :class:`FaceRegion`)."""
+                margin: float = 0.15, keypoints: Optional[dict] = None,
+                hull_margin_frac: float = 0.06, hull_parts: tuple[str, ...] = ("eye", "nose")) -> FaceRegion:
+        """Return ``(face_crop_bgr, face_mask_bool, crop_bbox)`` (a :class:`FaceRegion`).
+
+        ``keypoints`` are frame-coordinate part landmarks ``{name: [[x, y, ...], ...]}``;
+        the convex hull of the parts named in ``hull_parts`` (default eyes + nose:
+        the central face, so the hull stays on the horse; ears would pull in the
+        background beside the head), dilated by ``hull_margin_frac`` x crop width,
+        is added to the face mask.
+        """
         h_img, w_img = frame.shape[:2]
         head = clip_bbox(tuple(int(v) for v in head_bbox), w_img, h_img)  # type: ignore[arg-type]
         cb = expand_bbox(head, margin, w_img, h_img)
@@ -132,6 +146,29 @@ class FaceRegionExtractor:
             # Border-replicate so that the crop edge itself is not treated as background.
             eroded = cv2.erode(mask.astype(np.uint8), kernel, borderType=cv2.BORDER_REPLICATE).astype(bool)
             mask = eroded if eroded.sum() > 0.05 * mask.sum() else mask
+        hull_added = 0.0
+        hull = None
+        coat: Optional[np.ndarray] = None
+        if keypoints:
+            kc: dict[str, list[list[float]]] = {}
+            for k, v in keypoints.items():
+                if not any(part in str(k).lower() for part in hull_parts):
+                    continue
+                try:
+                    kc[k] = [[float(pt[0]) - cb[0], float(pt[1]) - cb[1]] for pt in v]
+                except (TypeError, IndexError, ValueError):
+                    continue
+            hull = landmark_hull_mask(kc, (ch, cw), hull_margin_frac * cw)
+        if hull is not None:
+            if mask is None or not mask.any():
+                mask, source, hull_added = hull, "landmark_hull", 1.0
+            else:
+                added = hull & ~mask
+                if added.any():
+                    coat = mask
+                    mask = mask | hull
+                    source = "seg+landmark_hull"
+                    hull_added = float(added.sum()) / float(mask.sum())
         if mask is None or not mask.any():
             # TODO(phase2-upgrade): ellipse fallback = no real face segmentation.
             source = "ellipse_fallback"
@@ -144,7 +181,10 @@ class FaceRegionExtractor:
             nw, nh = int(round(cw * scale)), int(round(ch * scale))
             crop_img = cv2.resize(crop_img, (nw, nh), interpolation=cv2.INTER_CUBIC)
             mask = cv2.resize(mask.astype(np.uint8), (nw, nh), interpolation=cv2.INTER_NEAREST).astype(bool)
-        return FaceRegion(crop=crop_img, face_mask=mask, crop_bbox=cb, upscale=scale, face_mask_source=source)
+            if coat is not None:
+                coat = cv2.resize(coat.astype(np.uint8), (nw, nh), interpolation=cv2.INTER_NEAREST).astype(bool)
+        return FaceRegion(crop=crop_img, face_mask=mask, crop_bbox=cb, upscale=scale, face_mask_source=source,
+                          hull_added_frac=round(hull_added, 4), coat_mask=coat)
 
 
 

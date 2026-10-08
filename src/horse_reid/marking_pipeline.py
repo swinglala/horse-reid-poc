@@ -141,11 +141,12 @@ def run_phase2(cfg: MarkingConfig) -> dict[str, Any]:
             if frame is None:
                 continue
             t0 = time.time()
-            region = extractor.extract(frame, e.get("horse_bbox"), tuple(e["head_bbox"]), margin=cfg.margin)
+            region = extractor.extract(frame, e.get("horse_bbox"), tuple(e["head_bbox"]), margin=cfg.margin,
+                                       keypoints=(e.get("extra") or {}).get("keypoints"))
             timing["face_region"] += time.time() - t0
             kps = _kps_to_crop((e.get("extra") or {}).get("keypoints"), region.crop_bbox, region.upscale)
             t0 = time.time()
-            res = segmenter.predict(region.crop, region.face_mask, kps)
+            res = segmenter.predict(region.crop, region.face_mask, kps, coat_mask=region.coat_mask)
             timing["segment"] += time.time() - t0
 
             t0 = time.time()
@@ -163,6 +164,7 @@ def run_phase2(cfg: MarkingConfig) -> dict[str, Any]:
                 "crop_bbox": [int(v) for v in region.crop_bbox],
                 "upscale": region.upscale,
                 "face_mask_source": region.face_mask_source,
+                "hull_added_frac": region.hull_added_frac,
                 "head_method": e.get("head_method"),
                 **res.to_dict(),
             }

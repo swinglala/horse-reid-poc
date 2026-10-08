@@ -155,13 +155,14 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 | 항목 | 값 |
 |---|---|
 | segmenter | `sam_refined` (30 frames) |
-| marking이 accept된 프레임 | 9 / 30 (frontal 2/7, three_quarter 3/9, profile 4/14) |
-| 평균 marking 면적 | 얼굴의 0.34% (전체), 1.12% (accept된 프레임) |
-| 제외된 영역 | too_small 336, low_solidity 37, strap_shape 35, edge_fragment 35, outside_landmark_hull 27, sam_flood 12, above_ears 7 |
+| marking이 accept된 프레임 | 9 / 30 (frontal 1/7, three_quarter 4/9, profile 4/14) |
+| 평균 marking 면적 | 얼굴의 0.14% (전체), 0.46% (accept된 프레임) |
+| 제외된 영역 | too_small 340, low_solidity 38, strap_shape 34, edge_fragment 33, outside_landmark_hull 26, sam_flood 12, above_ears 7, eye_glint 2 |
+| face mask | seg 18 / seg+landmark_hull 12 (hull이 추가한 면적은 최대 3%) |
 | coat class | dark 24 / medium 6 (`white_marking_applicable: true`) |
-| wall time | 48.6 s (CPU) |
+| wall time | 33.7 s (CPU) |
 
-**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 990에서 accept된다. 세 번째 영상 작업(아래) 이후 face mask가 머리 crop 전체를 덮도록 바뀌면서 z 정규화 기준이 미세하게 달라졌고, 그 결과 frame 975의 star(84 px, z 3.4)는 후보 문턱 아래로 떨어졌다. 반대로 frame 828에서는 이마의 햇빛 광택(얼굴의 6%, z 4.5)이 새로 accept되었다: 이전에는 SAM mask가 우연히 길쭉하게 나와 `strap_shape`로 제외됐지만 이제 SAM이 범람(`sam_flood`)해 base 후보가 그대로 통과한다. 둘 다 경계선 사례이며 이 segmenter의 취약점이다. 나머지 accept 성분(예: frame 363/576)은 ear-base / poll highlight로 false positive이다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
+**솔직한 평가:** 이 말은 dark bay이고 이마에 작은 star만 있다 (2x upscale에서 약 80–180 px). star는 정면 프레임 990에서 accept된다. 세 번째 영상 작업(아래) 이후 face mask가 머리 crop 전체를 덮도록 바뀌면서 z 정규화 기준이 미세하게 달라졌고, 그 결과 frame 975의 star(84 px, z 3.4)는 후보 문턱 아래로 떨어졌다. frame 828의 이마 햇빛 광택(얼굴의 6%, z 4.5)은 main의 재실행에서는 accept됐다가(SAM이 범람해 base 후보가 그대로 통과) landmark hull 보강(세 번째 영상 5번 항목) 후 다시 제외되는 등 SAM 결과가 face mask의 작은 차이에 흔들린다. 둘 다 경계선 사례이며 이 segmenter의 취약점이다. 나머지 accept 성분(예: frame 363/576)은 ear-base / poll highlight로 false positive이다. 갈기, 목, halter strap, 초록색 tag는 gate (`strap_shape`, `outside_landmark_hull`, high_chroma 등)로 제외된다. 3/4 view에서는 star가 보이지만 z-threshold 아래라 recall이 낮다. segmenter는 교체 가능한 baseline이다 (`HorseMarkingSegmenter` registry: `adaptive_color`, `sam_refined` 기본, `yolo_seg` stub).
 
 ### Phase 3: canonical marking reference
 
@@ -178,17 +179,12 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |                   ░░           |
 |              ░░                |
 |                ░               |
-|                                |
-|     *             *            |
+|         *                      |
+|     *                  *       |
 |               *                |
 |                                |
 |                 ░              |
-|             *    ░             |
-|                                |
-|                                |
-|                                |
-|                                |
-|            *                   |
+|                  ░             |
 |                                |
 |                                |
 |                                |
@@ -197,6 +193,11 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |                                |
 |                                |
 |                                |
+|                                |
+|                                |
+|                                |
+|            ░                   |
+|            ░                   |
 |                                |
 |           ░                    |
 |                                |
@@ -212,16 +213,16 @@ Frame 975 overlay (crop | face mask | candidate prob | final):
 |                                |
 +--------------------------------+
 value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ >=.8;  * = peak below ░
-peaks (canonical x,y): p0(125,85) n=2 s=0.08; p1(103,145) n=1 s=0.06; p2(104,109) n=1 s=0.06; p3(150,35) n=1 s=0.05; p4(46,75) n=1 s=0.04; p5(114,51) n=1 s=0.03; p6(154,72) n=1 s=0.03; p7(108,287) n=1 s=0.02
+peaks (canonical x,y): p0(150,35) n=1 s=0.05; p1(46,75) n=1 s=0.04; p2(75,67) n=2 s=0.04; p3(114,51) n=1 s=0.03; p4(126,84) n=1 s=0.02; p5(108,287) n=1 s=0.02; p6(195,74) n=1 s=0.02
 ```
 
 ![Final report](docs/results/final_report.jpg)
 
-- 29 / 30 프레임 mapping (frame 648은 usable landmark/mask 없음). view: frontal 7 / 3-4 8 / profile 14.
-- canonical mask px = 0: 어떤 픽셀도 prob 0.5를 넘지 못한다 (star는 1프레임에서만 accept).
-- candidate peak 8개, 그중 multi-frame support 1개:
-  - p0 (125,85) n=2, frames [828, 990]: 이마 star 위치. 다만 frame 828의 기여는 star가 아니라 이마 전체를 덮은 광택 patch이므로 실질적인 star 관측은 frame 990 하나다.
-  - 나머지 7개는 단일 프레임 peak (828 광택 2개, 363 ear-base 2개 등)로 false positive로 추정.
+- 29 / 30 프레임 mapping (skipped: [648]). view: frontal 7 / 3-4 8 / profile 14.
+- canonical mask px = 0: star는 1프레임(990)에서만 accept되어 prob 0.5를 넘지 못한다.
+- candidate peak 7개, 그중 multi-frame support 1개:
+  - p2 (75,67) n=2, frames [576, 624]: 귀 밑 highlight로 추정 (star 위치가 아님).
+  - 단일 프레임 peak 6개 (ear-base highlight 등)는 false positive로 추정. 이마 star는 frame 990의 단일 peak로만 남는다.
 - `face_embedding`: CLIP ViT-B/32, 29개 crop의 mean (보조 용도). 주 identity 증거는 canonical marking mask이다.
 
 `reference/horse_reference.json` 구조 (일부 생략):
@@ -239,9 +240,9 @@ peaks (canonical x,y): p0(125,85) n=2 s=0.08; p1(103,145) n=1 s=0.06; p2(104,109
     "mapper": "planar",
     "canonical_size": [256, 320],
     "files": {"prob": "...", "coverage": "...", "mask": "...", "marking": "...", "ascii": "..."},
-    "canonical_peaks": [{"id": "p0", "x": 125, "y": 85, "n_support": 2, "frames": [828, 990], "...": "..."}],
+    "canonical_peaks": [{"id": "p0", "x": 150, "y": 35, "n_support": 1, "frames": [843], "...": "..."}],
     "params": {"peak_sigma": 4.0, "prob_threshold": 0.5, "...": "..."},
-    "stats": {"mask_px": 0, "n_peaks": 8, "n_peaks_multi": 1, "skipped_frames": [648]},
+    "stats": {"mask_px": 0, "n_peaks": 7, "n_peaks_multi": 1, "skipped_frames": [648]},
     "notes": ["..."]
   }
 }
@@ -293,10 +294,10 @@ Frame 25 overlay (crop | face mask | candidate prob | final):
 | yaw bin (선택) | three_quarter 5 / frontal 3 / profile 2 (후보: 3/4 49, frontal 13, profile 4) |
 | 머리 크기 (median) | 95x208 px (`< 96 px` 경고가 뜨지만 2704 px 원본이라 crop 화질은 충분) |
 | wall time (Phase 1) | 243 s (head stage 218 s, 66 frames) |
-| Phase 2 | marking 9 / 10 프레임 (frontal 3/3, three_quarter 5/5, profile 1/2), 평균 얼굴의 5.1% (전체), 5.6% (accept된 프레임), 32 s |
-| 제외된 영역 | too_small 56, outside_landmark_hull 14, high_chroma 11 (빨간 halter), edge_fragment 9, strap_shape 4, blown_highlight 3, low_solidity 1 |
+| Phase 2 | marking 9 / 10 프레임 (frontal 3/3, three_quarter 5/5, profile 1/2), 평균 얼굴의 10.8% (전체), 12.0% (accept된 프레임). face mask: seg+landmark_hull 7 / seg 3 |
+| 제외된 영역 | too_small 58, high_chroma 14 (빨간 halter), outside_landmark_hull 10, edge_fragment 10, strap_shape 4, blown_highlight 2, low_solidity 1, sam_flood 1 |
 | coat class | dark 10 / 10 (`white_marking_applicable: true`) |
-| Phase 3 | canonical mask px 94, peak 6개 중 multi-frame 4개: p0 (138,167) n=5 frames [2, 8, 22, 25, 35], p1 (129,126) n=3, p2 (94,184) n=2, p3 (69,151) n=2. max support 0.56, 최대 4프레임 겹침 |
+| Phase 3 | canonical mask px 878, peak 8개 중 multi-frame 6개: p0 (135,271) n=6 frames [8, 11, 18, 25, 35, 65] (noseband 아래 muzzle 쪽 blaze), p1 (138,167) n=5, p2 (144,206) n=4, p3 (95,188) n=3, p4 (129,126) n=3, p5 (69,151) n=2. max support 0.78, 최대 5프레임 겹침 |
 
 ```
           HORSE MARKING           
@@ -306,7 +307,7 @@ Frame 25 overlay (crop | face mask | candidate prob | final):
 |                                |
 |                                |
 |                                |
-|       *   ░                    |
+|           ░                    |
 |           ░                    |
 |                                |
 |                                |
@@ -325,35 +326,36 @@ Frame 25 overlay (crop | face mask | candidate prob | final):
 |         ░░░░  ░░▒░░░           |
 |          ░░░░ ░░▒░░░           |
 |          ░░░░  ░░░░░░          |
-|          ░░░░   ░░░░░          |
-|           ░░░░░ ░░ ░░          |
-|             ░░  ░░             |
-|                                |
-|               ░       *        |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
-|                                |
+|          ░░░░ ░░░░░░░          |
+|           ░░░░░░▒▒ ░░          |
+|            ░░░░░▒▒░            |
+|           ░░░░░▒▒▒             |
+|               ░░░▒░            |
+|             ░░░░               |
+|            ░░░▒▒▒▒             |
+|             ░░▒▒▒▒             |
+|             ░░▒▒▒░    *        |
+|             ░░▒▒▒              |
+|              ░▒▒▒              |
+|              ░▒▒▒              |
+|              ░▒▒░              |
+|               ░░               |
+|                         *      |
 |                                |
 +--------------------------------+
 value = max(prob x coverage) per cell;  ' ' <.2  ░ <.4  ▒ <.6  ▓ <.8  █ >=.8;  * = peak below ░
-peaks (canonical x,y): p0(138,167) n=5 s=0.46; p1(129,126) n=3 s=0.26; p2(94,184) n=2 s=0.24; p3(69,151) n=2 s=0.23; p4(186,228) n=1 s=0.18; p5(59,47) n=1 s=0.14
+peaks (canonical x,y): p0(135,271) n=6 s=0.61; p1(138,167) n=5 s=0.46; p2(144,206) n=4 s=0.45; p3(95,188) n=3 s=0.31; p4(129,126) n=3 s=0.26; p5(69,151) n=2 s=0.23; p6(205,310) n=1 s=0.19; p7(190,263) n=1 s=0.18
 ```
 
-**이 영상이 드러낸 문제와 수정 (모두 코드에 반영, 84 tests):**
+**이 영상이 드러낸 문제와 수정 (모두 코드에 반영, 86 tests):**
 
 1. **face mask가 얼굴 절반을 잘라냈다.** `horse_mask_in_crop`은 YOLO11-seg 마스크를 tracker의 말 bbox 안으로만 붙여 넣었는데, 이 영상은 말 옆에 선 사람 때문에 말 bbox 오른쪽 끝(x=1503)이 머리(x≤1565)보다 좁았다. 그래서 blaze가 있는 오른쪽 절반이 face mask 밖으로 밀려났고 첫 실행에서는 marking이 0.1% 이하였다. 이제 seg 박스를 말 bbox와 머리 crop의 합집합으로 넓힌다.
 2. **blaze가 `strap_shape`로 제외됐다.** 길쭉한 영역(min-area-rect 비율 > 4)을 모두 strap으로 보던 규칙에 방향 기준을 추가했다: 영역의 주축(PCA)이 얼굴 축(ear/eye 중점 → nose)과 30° 이내면 끈이 아니라 줄무늬다. halter 끈은 얼굴을 가로지르고 blaze는 얼굴을 따라 뻗는다. 같은 기준을 `sam_refined`의 SAM-mask strap 판정에도 적용했다 (`sam_axis_deg`).
 3. **blaze가 `low_solidity`, `blown_highlight`로 제외됐다.** 굽은 blaze는 convex-hull solidity가 0.36–0.50이고, 햇빛 아래 흰 털은 픽셀의 40–60%가 센서 클리핑된다. 그래서 "strong" 영역(얼굴의 1% 이상이면서 coat 대비 z ≥ 6.5)에는 solidity 하한 0.35를 쓰고 노출 게이트를 면제한다. 영상 1에서 이 게이트들이 걸러낸 영역은 z가 최대 5.9였고, 이 말의 blaze는 7.0–9.8이다.
 4. **방향 예외는 strong 영역에만 적용한다.** 처음에는 방향 기준만으로 strap을 면제했는데, 영상 1의 코등을 따라 난 햇빛 광택(z 2.8–5.8)도 얼굴 축과 평행하고 길쭉해서 15 / 30 프레임이 false positive가 되었다. strong 조건을 묶자 영상 1은 기존 동작으로 돌아왔다 (위 Phase 2 표의 차이는 1번 수정의 부수 효과).
+5. **얼굴 영역을 landmark로 보강했다 (branch `landmark-face-region`).** 1–4 적용 후에도 YOLO11-seg 얼굴 마스크가 noseband에서 끝나 끈 아래 muzzle 쪽 blaze는 후보에도 오르지 못했다 (5.1%). 이제 Phase 2의 얼굴 영역은 seg 마스크 ∪ (눈·코 landmark의 convex hull, crop 폭의 6% 팽창)이다. 귀까지 넣은 hull은 옆 사람의 손과 밝은 바닥을 끌어들여 오히려 나빠졌고(5 / 10), 눈·코 삼각형만 쓰면 얼굴 중앙에 머문다. 단, hull로 추가된 영역(흰 muzzle)이 coat 기준 통계와 조명 보정 필드에 들어가면 blaze의 z가 8.3에서 6.5로 떨어져 정면 프레임이 빠졌으므로, coat 기준은 seg 부분(`coat_mask`)에서만 계산하고 탐색 범위만 넓힌다. 또 strong 후보 자신이 얼굴 축 방향이면 SAM mask가 끈 위로 흘러가도(IoU 0.22) strap으로 재판정하지 않는다. 결과 5.1% → 10.8%, muzzle 쪽 peak p0가 6프레임 지지.
 
-**남은 한계:** (a) YOLO11-seg 얼굴 마스크가 noseband에서 끝나 코끝까지 이어지는 blaze 아랫부분은 집계되지 않는다. (b) profile 프레임 56은 landmark hull 밖이라 제외됐다. (c) canonical map에서 blaze가 한 줄이 아니라 여러 갈래로 퍼진 것은 planar mapper가 3/4 view를 평면 template에 근사하는 정렬 오차다. (d) 1.1 s 클립이라 10프레임이 사실상 같은 pose의 연속 프레임이다.
+**남은 한계:** (a) 눈·코 hull은 정면/3-4 view에서만 muzzle을 되살린다. (b) profile 프레임 56은 landmark hull 밖이라 제외됐다. (c) canonical map에서 blaze가 한 줄이 아니라 여러 갈래로 퍼진 것은 planar mapper가 3/4 view를 평면 template에 근사하는 정렬 오차다. (d) 1.1 s 클립이라 10프레임이 사실상 같은 pose의 연속 프레임이다.
 
 ## 6. 한계와 다음 단계
 
@@ -387,7 +389,7 @@ src/horse_reid/
   canonical/                      base.py, planar.py, fourdequine.py, embedding.py, reference.py, io.py
 scripts/                          run_pipeline.py, select_frames.py, run_marking.py,
                                   build_reference.py, convert_aihub.py
-tests/                            84 tests (test_smoke, test_grounded_head, test_marking, test_canonical)
+tests/                            86 tests (test_smoke, test_grounded_head, test_marking, test_canonical)
 docs/                             model_selection.md, aihub_dataset.md, 4dequine_integration.md, results/
 ```
 

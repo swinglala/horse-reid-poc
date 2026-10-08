@@ -310,7 +310,7 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
         self.params = params or AdaptiveColorParams()
 
     def predict(self, image: np.ndarray, face_mask: Optional[np.ndarray] = None,
-                keypoints: Optional[dict] = None) -> MarkingResult:
+                keypoints: Optional[dict] = None, coat_mask: Optional[np.ndarray] = None) -> MarkingResult:
         """
         Returns:
             mask: binary or probability mask
@@ -319,17 +319,25 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
         fm = full_face_mask(image, face_mask)
         h, w = fm.shape
         face_area = int(fm.sum())
+        # Coat reference: the seg-derived part of the face when the face mask was
+        # extended with the landmark hull (the extension is what we inspect, not
+        # the reference), otherwise the whole face mask.
+        cm = fm
+        if coat_mask is not None and coat_mask.shape == fm.shape:
+            cm_c = coat_mask.astype(bool) & fm
+            if cm_c.sum() >= max(20, 0.25 * face_area):
+                cm = cm_c
         L, a, b = lab_float(image)
         if p.local_illumination and face_area > 0:
-            illum = illumination_field(L, fm, p.local_kernel_frac, p.exclude_top_frac)
-            gmed, _ = coat_statistics(L, fm, p.exclude_top_frac, p.min_mad)
+            illum = illumination_field(L, cm, p.local_kernel_frac, p.exclude_top_frac)
+            gmed, _ = coat_statistics(L, cm, p.exclude_top_frac, p.min_mad)
             L_eff = L - illum + gmed
             illum_mode = "local"
         else:
-            illum = np.full(L.shape, float(np.median(L[fm])) if face_area else float(np.median(L)), np.float32)
+            illum = np.full(L.shape, float(np.median(L[cm])) if face_area else float(np.median(L)), np.float32)
             L_eff = L
             illum_mode = "global"
-        med, mad = coat_statistics(L_eff, fm, p.exclude_top_frac, p.min_mad)
+        med, mad = coat_statistics(L_eff, cm, p.exclude_top_frac, p.min_mad)
         z = (L_eff - med) / (MAD_TO_SIGMA * mad)
         chroma = np.sqrt(a * a + b * b)
         z0 = p.z0_local if illum_mode == "local" else p.z0
@@ -432,6 +440,8 @@ class AdaptiveColorSegmenter(HorseMarkingSegmenter):
             "marking_area_frac": round(float(mask.sum()) / max(face_area, 1), 6),
             "n_components": len(components),
             "coat_L_median": round(med, 3),
+            "coat_ref_px": int(cm.sum()),
+            "coat_ref_frac": round(float(cm.sum()) / max(face_area, 1), 4),
             "coat_class": coat_class(med),
             "coat_L_mad": round(mad, 3),
             "face_area_px": face_area,

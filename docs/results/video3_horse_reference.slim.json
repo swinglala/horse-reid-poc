@@ -2,6 +2,7 @@
   "horse_id": "mal1",
   "reference": {
     "canonical_marking_mask": "reference/canonical_mask.png",
+    "face_embedding": "<512-d CLIP vector omitted in this copy>",
     "face_embedding_method": "clip_ViT-B-32_mean_of_10",
     "view_count": 10,
     "views": {
@@ -38,6 +39,24 @@
     },
     "canonical_peaks": [
       {
+        "x": 135,
+        "y": 271,
+        "support_s": 0.6142,
+        "support": 0.6035,
+        "prob": 0.5942,
+        "coverage": 0.7763,
+        "n_support": 6,
+        "frames": [
+          8,
+          11,
+          18,
+          25,
+          35,
+          65
+        ],
+        "id": "p0"
+      },
+      {
         "x": 138,
         "y": 167,
         "support_s": 0.459,
@@ -52,7 +71,38 @@
           25,
           35
         ],
-        "id": "p0"
+        "id": "p1"
+      },
+      {
+        "x": 144,
+        "y": 206,
+        "support_s": 0.4478,
+        "support": 0.5604,
+        "prob": 0.5474,
+        "coverage": 0.7803,
+        "n_support": 4,
+        "frames": [
+          8,
+          11,
+          25,
+          35
+        ],
+        "id": "p2"
+      },
+      {
+        "x": 95,
+        "y": 188,
+        "support_s": 0.3052,
+        "support": 0.3851,
+        "prob": 0.2466,
+        "coverage": 0.996,
+        "n_support": 3,
+        "frames": [
+          18,
+          28,
+          35
+        ],
+        "id": "p3"
       },
       {
         "x": 129,
@@ -67,21 +117,7 @@
           22,
           35
         ],
-        "id": "p1"
-      },
-      {
-        "x": 94,
-        "y": 184,
-        "support_s": 0.2401,
-        "support": 0.2435,
-        "prob": 0.2416,
-        "coverage": 0.996,
-        "n_support": 2,
-        "frames": [
-          18,
-          28
-        ],
-        "id": "p2"
+        "id": "p4"
       },
       {
         "x": 69,
@@ -95,33 +131,33 @@
           18,
           28
         ],
-        "id": "p3"
+        "id": "p5"
       },
       {
-        "x": 186,
-        "y": 228,
-        "support_s": 0.1778,
+        "x": 205,
+        "y": 310,
+        "support_s": 0.1864,
         "support": 0.1784,
-        "prob": 0.1769,
+        "prob": 0.0073,
         "coverage": 0.7803,
         "n_support": 1,
         "frames": [
           65
         ],
-        "id": "p4"
+        "id": "p6"
       },
       {
-        "x": 59,
-        "y": 47,
-        "support_s": 0.1373,
-        "support": 0.1759,
-        "prob": 0.1849,
-        "coverage": 0.8017,
+        "x": 190,
+        "y": 263,
+        "support_s": 0.1783,
+        "support": 0.1784,
+        "prob": 0.1638,
+        "coverage": 0.7803,
         "n_support": 1,
         "frames": [
-          35
+          65
         ],
-        "id": "p5"
+        "id": "p7"
       }
     ],
     "params": {
@@ -134,19 +170,19 @@
       "min_coverage": 0.15
     },
     "stats": {
-      "mask_px": 94,
+      "mask_px": 878,
       "observed_px": 81920,
-      "mean_consistency_observed": 0.9444,
-      "n_peaks": 6,
-      "n_peaks_multi": 4,
+      "mean_consistency_observed": 0.9196,
+      "n_peaks": 8,
+      "n_peaks_multi": 6,
       "peak_sigma": 4.0,
       "min_support": 0.02,
-      "max_support": 0.5599,
-      "max_n_support": 4,
+      "max_support": 0.7828,
+      "max_n_support": 5,
       "joined_frames": 10,
       "skipped_frames": []
     },
-    "created_utc": "2026-10-08T10:36:34+00:00",
+    "created_utc": "2026-10-08T11:00:45+00:00",
     "notes": [
       "Aggregation of REAL observations only: no generated, in-painted or mirrored face; unobserved canonical pixels have coverage 0.",
       "canonical_marking_mask is the PRIMARY identity evidence; face_embedding is an auxiliary descriptor.",
@@ -155,7 +191,6 @@
       "mask = (prob > 0.5) & (coverage > 0.15)",
       "support = sum(w * accepted_mask) / sum(w): weighted fraction of observations whose Phase-2 accepted mask covers the pixel; n_support = number of such frames (canonical_nsupport.png stores raw counts).",
       "canonical_peaks are CANDIDATE marking locations: local maxima of support_s = gaussian(support, sigma=4.0) >= 0.02 (min distance 12 px, max 8), ranked by support_s, each backed by >= 1 accepted frame mask within 8 px (frames/n_support = frames with mask pixels in that radius); prob/coverage are reported only. They are not part of the mask, which requires prob > 0.5."
-    ],
-    "face_embedding": "<512-d CLIP vector omitted in this copy>"
+    ]
   }
 }
